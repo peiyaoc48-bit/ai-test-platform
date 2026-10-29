@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>小待办 - 我的待办</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header><span>小待办 TodoLite</span><button class="link" data-test="logout" id="logout">退出登录</button></header>
+  <main>
+    <h1 data-test="welcome">欢迎你，<span id="user"></span></h1>
+    <form class="row" id="add-form">
+      <input id="new-todo" type="text" data-test="new-todo" placeholder="今天要做什么？" autocomplete="off" />
+      <button type="submit" data-test="add">添加</button>
+    </form>
+    <ul id="list" data-test="todo-list"></ul>
+    <p class="footer" data-test="summary" id="summary"></p>
+  </main>
+  <script>
+    const user = sessionStorage.getItem('todo-user')
+    if (!user) location.replace('./index.html')
+    document.getElementById('user').textContent = user
+    // 每次进入页面带两条初始待办，保证用例可重复执行
+    let todos = [{ text: '阅读 Playwright 文档', done: true }, { text: '写一条自动化用例', done: false }]
+    const list = document.getElementById('list')
+    function render() {
+      list.innerHTML = ''
+      if (!todos.length) list.innerHTML = '<li class="empty">暂无待办</li>'
+      todos.forEach((t, i) => {
+        const li = document.createElement('li')
+        li.dataset.test = 'todo-item'
+        if (t.done) li.className = 'done'
+        li.innerHTML = '<input type="checkbox" data-test="toggle"><span></span><button class="del" data-test="delete">删除</button>'
+        li.querySelector('span').textContent = t.text
+        li.querySelector('input').checked = t.done
+        li.querySelector('input').onchange = () => { t.done = !t.done; render() }
+        li.querySelector('.del').onclick = () => { todos.splice(i, 1); render() }
+        list.appendChild(li)
+      })
+      const done = todos.filter((t) => t.done).length
+      document.getElementById('summary').textContent = `共 ${todos.length} 项，已完成 ${done} 项`
+    }
+    document.getElementById('add-form').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const input = document.getElementById('new-todo')
+      const text = input.value.trim()
+      if (!text) return
+      todos.push({ text, done: false })
+      input.value = ''
+      render()
+    })
+    document.getElementById('logout').onclick = () => { sessionStorage.removeItem('todo-user'); location.href = './index.html' }
+    render()
+  </script>
+</body>
+</html>

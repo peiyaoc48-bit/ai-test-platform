@@ -1,0 +1,40 @@
+{
+  "name": "ai-test-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI 驱动的 UI 自动化测试平台（Playwright + Midscene.js）",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"tsx watch --clear-screen=false server/index.ts\" \"vite\"",
+    "build": "vite build",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p web/tsconfig.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.8",
+    "@midscene/web": "^1.17.2",
+    "@playwright/test": "1.64.0",
+    "better-sqlite3": "^12.11.1",
+    "dotenv": "^18.0.9",
+    "fastify": "^5.12.7",
+    "playwright": "1.64.0",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "concurrently": "^9.2.5",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^4.1.12",
+    "vue-tsc": "^3.3.13"
+  }
+}

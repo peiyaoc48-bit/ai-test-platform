@@ -1,0 +1,10 @@
+node_modules/
+dist/
+data/
+midscene_run/
+test-results/
+playwright-report/
+.env
+.env.local
+*.log
+.DS_Store

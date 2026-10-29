@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>小待办 - 登录</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header><span>小待办 TodoLite</span></header>
+  <main>
+    <h1>登录</h1>
+    <form id="login" data-test="login-form">
+      <label for="username">用户名</label>
+      <input id="username" type="text" data-test="username" placeholder="请输入用户名" autocomplete="off" />
+      <label for="password">密码</label>
+      <input id="password" type="password" data-test="password" placeholder="请输入密码" />
+      <button class="primary" type="submit" data-test="submit">登录</button>
+      <div id="error" class="error" data-test="error" hidden></div>
+    </form>
+    <p class="footer">演示账号：demo / demo123</p>
+  </main>
+  <script>
+    document.getElementById('login').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const u = document.getElementById('username').value.trim()
+      const p = document.getElementById('password').value
+      const err = document.getElementById('error')
+      if (!u || !p) { err.textContent = '请输入用户名和密码'; err.hidden = false; return }
+      if (u !== 'demo' || p !== 'demo123') { err.textContent = '用户名或密码错误'; err.hidden = false; return }
+      sessionStorage.setItem('todo-user', u)
+      location.href = './todos.html'
+    })
+  </script>
+</body>
+</html>
