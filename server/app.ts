@@ -7,7 +7,9 @@ import type { PlatformConfig } from '../shared/types.js'
 import { demoBaseUrl, modelConfig } from './config.js'
 import type { DB } from './db.js'
 import { createCase, deleteCase, getCase, listCases, updateCase } from './repo/cases.js'
-import { validateCase, ValidationError } from './validate.js'
+import { createRun, getRun, listRuns } from './repo/runs.js'
+import type { Executor } from './runner/executor.js'
+import { resolveUrl, validateCase, ValidationError } from './validate.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
@@ -15,6 +17,8 @@ export interface AppOptions {
   db: DB
   port: number
   artifactsDir: string
+  midsceneDir?: string
+  executor: Executor
   /** 生产模式下托管前端构建产物 */
   webDist?: string
   logger?: boolean
@@ -34,6 +38,10 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   await app.register(fastifyStatic, { root: path.join(here, 'demo-site'), prefix: '/demo/' })
   fs.mkdirSync(opts.artifactsDir, { recursive: true })
   await app.register(fastifyStatic, { root: opts.artifactsDir, prefix: '/artifacts/', decorateReply: false })
+  if (opts.midsceneDir) {
+    fs.mkdirSync(opts.midsceneDir, { recursive: true })
+    await app.register(fastifyStatic, { root: opts.midsceneDir, prefix: '/midscene/', decorateReply: false })
+  }
 
   const idParam = (req: { params: unknown }) => {
     const id = Number((req.params as { id: string }).id)
@@ -61,6 +69,20 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     if (!deleteCase(db, idParam(req))) throw notFound('用例')
     reply.status(204).send()
   })
+
+  // —— 执行与报告 ——
+  app.post('/api/cases/:id/run', async (req, reply) => {
+    const tc = getCase(db, idParam(req))
+    if (!tc) throw notFound('用例')
+    const runId = createRun(db, tc, resolveUrl(tc.url, demoBaseUrl(opts.port)))
+    opts.executor.enqueue(runId)
+    reply.status(202).send({ runId })
+  })
+  app.get('/api/runs', async (req) => {
+    const q = req.query as { caseId?: string; limit?: string }
+    return listRuns(db, { caseId: q.caseId ? Number(q.caseId) : undefined, limit: Math.min(Number(q.limit) || 50, 500) })
+  })
+  app.get('/api/runs/:id', async (req) => getRun(db, idParam(req)) ?? Promise.reject(notFound('运行记录')))
 
   if (opts.webDist && fs.existsSync(opts.webDist)) {
     await app.register(fastifyStatic, { root: opts.webDist, prefix: '/', decorateReply: false, wildcard: false })

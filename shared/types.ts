@@ -23,7 +23,8 @@ export interface TestCase {
 
 export type CaseInput = Pick<TestCase, 'name' | 'description' | 'url' | 'steps'>
 
-export type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'error'
+/** skipped：所有步骤都被跳过（如全是自然语言步骤但未配置模型） */
+export type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'error' | 'skipped'
 export type StepStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped' | 'not_run'
 
 export interface StepResult {

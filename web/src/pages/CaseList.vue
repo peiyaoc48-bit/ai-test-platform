@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from '../api'
 import type { TestCase } from '../../../shared/types'
 import { RUN_STATUS_LABEL, formatTime } from '../format'
 
+const router = useRouter()
 const cases = ref<TestCase[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -22,6 +24,11 @@ async function remove(c: TestCase) {
   if (!confirm(`确定删除用例“${c.name}”？其运行记录也会一并删除。`)) return
   await api.deleteCase(c.id)
   await load()
+}
+
+async function run(c: TestCase) {
+  const { runId } = await api.runCase(c.id)
+  router.push(`/runs/${runId}`)
 }
 
 const aiCount = (c: TestCase) => c.steps.filter((s) => s.type !== 'code').length
@@ -48,7 +55,7 @@ onMounted(load)
             <th>目标 URL</th>
             <th style="width: 150px">步骤</th>
             <th style="width: 170px">最近运行</th>
-            <th style="width: 180px"></th>
+            <th style="width: 220px"></th>
           </tr>
         </thead>
         <tbody>
@@ -65,13 +72,14 @@ onMounted(load)
             </td>
             <td>
               <template v-if="c.lastRun">
-                <span class="tag" :class="c.lastRun.status">{{ RUN_STATUS_LABEL[c.lastRun.status] }}</span>
+                <RouterLink :to="`/runs/${c.lastRun.id}`"><span class="tag" :class="c.lastRun.status">{{ RUN_STATUS_LABEL[c.lastRun.status] }}</span></RouterLink>
                 <div class="muted num" style="font-size: 12px">{{ formatTime(c.lastRun.startedAt) }}</div>
               </template>
               <span v-else class="muted">—</span>
             </td>
             <td>
               <div class="actions">
+                <button class="btn sm primary" @click="run(c)" data-test="run">▶ 运行</button>
                 <RouterLink class="btn sm" :to="`/cases/${c.id}/edit`" data-test="edit">编辑</RouterLink>
                 <button class="btn sm danger" @click="remove(c)" data-test="delete">删除</button>
               </div>

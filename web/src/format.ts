@@ -6,6 +6,7 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   passed: '通过',
   failed: '失败',
   error: '异常',
+  skipped: '跳过',
 }
 
 export const STEP_STATUS_LABEL: Record<StepStatus, string> = {

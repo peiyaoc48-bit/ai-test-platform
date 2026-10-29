@@ -4,10 +4,14 @@ import dotenv from 'dotenv'
 dotenv.config({ quiet: true })
 
 const env = process.env
+const dataDir = path.resolve(env.DATA_DIR || 'data')
+// Midscene 的报告、缓存写到平台数据目录（须在加载 @midscene/web 之前设置）
+env.MIDSCENE_RUN_DIR ||= path.join(dataDir, 'midscene')
 
 export const config = {
   port: Number(env.PORT || 3100),
-  dataDir: path.resolve(env.DATA_DIR || 'data'),
+  dataDir,
+  midsceneDir: env.MIDSCENE_RUN_DIR,
   browserChannel: env.BROWSER_CHANNEL ?? 'chrome',
   headless: env.HEADLESS !== 'false',
   /** 单个步骤的超时（AI 步骤除外，AI 步骤受模型超时控制） */
