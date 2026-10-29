@@ -1,0 +1,97 @@
+import { expect, test, type Page } from '@playwright/test'
+
+// 平台自身 E2E（未配置模型）：用平台的页面去测“平台测演示站点”这条链路
+
+async function createCase(page: Page, name: string, steps: { type?: string; content: string }[]) {
+  await page.goto('/cases')
+  await page.getByTestId('new-case').click()
+  await page.getByTestId('case-name-input').fill(name)
+  // 默认带一个自然语言空步骤，先删掉
+  await page.getByTestId('step-remove').first().click()
+  for (const s of steps) {
+    await page.getByTestId('add-code-step').click()
+    const row = page.getByTestId('step-row').last()
+    if (s.type) await row.getByTestId('step-type').selectOption(s.type)
+    await row.getByTestId('step-content').fill(s.content)
+  }
+  await page.getByTestId('save-case').click()
+  await expect(page).toHaveURL(/\/cases$/)
+}
+
+const row = (page: Page, name: string) => page.getByTestId('case-row').filter({ hasText: name })
+
+test('首页展示示例用例与“未配置模型”状态', async ({ page }) => {
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/cases$/)
+  await expect(page.getByTestId('case-row')).toHaveCount(3)
+  await expect(page.getByTestId('model-status')).toContainText('未配置模型')
+})
+
+test('新建用例 → 执行 → 查看报告', async ({ page }) => {
+  await createCase(page, 'E2E 登录并添加待办', [
+    { content: `await page.fill('[data-test=username]', 'demo')\nawait page.fill('[data-test=password]', 'demo123')\nawait page.click('[data-test=submit]')` },
+    { content: `await expect(page.locator('[data-test=welcome]')).toContainText('demo')` },
+    { content: `await page.fill('[data-test=new-todo]', 'E2E 待办')\nawait page.click('[data-test=add]')\nawait expect(page.getByText('E2E 待办')).toBeVisible()` },
+  ])
+  await row(page, 'E2E 登录并添加待办').getByTestId('run').click()
+
+  await expect(page).toHaveURL(/\/runs\/\d+$/)
+  await expect(page.getByTestId('run-status')).toHaveText('通过', { timeout: 30_000 })
+  await expect(page.getByTestId('step-status')).toHaveText(['通过', '通过', '通过'])
+  await expect(page.getByTestId('pass-rate')).toHaveText('100%')
+
+  await page.getByRole('link', { name: '测试报告' }).click()
+  await expect(page.getByTestId('run-row').first()).toContainText('E2E 登录并添加待办')
+  await expect(page.getByTestId('run-row').first()).toContainText('通过')
+})
+
+test('失败步骤展示错误信息和截图，后续步骤不执行', async ({ page }) => {
+  await createCase(page, 'E2E 故意失败', [
+    { content: `await expect(page.locator('h1')).toHaveText('注册', { timeout: 1000 })` },
+    { content: `await page.click('[data-test=submit]')` },
+  ])
+  await row(page, 'E2E 故意失败').getByTestId('run').click()
+  await expect(page.getByTestId('run-status')).toHaveText('失败', { timeout: 30_000 })
+  await expect(page.getByTestId('step-status')).toHaveText(['失败', '未执行'])
+  const shot = page.getByTestId('fail-shot')
+  await expect(shot).toBeVisible()
+  // 截图确实加载成功
+  expect(await shot.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+})
+
+test('未配置模型时自然语言步骤标记为跳过，代码步骤照常执行', async ({ page }) => {
+  await page.goto('/cases')
+  await row(page, '错误密码提示').getByTestId('run').click()
+  await expect(page.getByTestId('run-status')).toHaveText('通过', { timeout: 30_000 })
+  await expect(page.getByTestId('step-status')).toHaveText(['通过', '通过', '跳过'])
+  await expect(page.getByText('个自然语言步骤因未配置模型被跳过')).toBeVisible()
+})
+
+test('编辑与删除用例', async ({ page }) => {
+  await createCase(page, 'E2E 待编辑', [{ content: 'await page.title()' }])
+  await row(page, 'E2E 待编辑').getByTestId('edit').click()
+  await expect(page.getByTestId('case-name-input')).toHaveValue('E2E 待编辑')
+  await page.getByTestId('case-name-input').fill('E2E 已改名')
+  await page.getByTestId('save-case').click()
+  await expect(row(page, 'E2E 已改名')).toHaveCount(1)
+
+  page.once('dialog', (d) => d.accept())
+  await row(page, 'E2E 已改名').getByTestId('delete').click()
+  await expect(row(page, 'E2E 已改名')).toHaveCount(0)
+})
+
+test('表单校验：URL 不合法时给出提示', async ({ page }) => {
+  await page.goto('/cases/new')
+  await page.getByTestId('case-name-input').fill('坏 URL')
+  await page.getByTestId('case-url-input').fill('ftp://example.com')
+  await page.getByTestId('step-content').fill('点击登录')
+  await page.getByTestId('save-case').click()
+  await expect(page.getByTestId('form-error')).toContainText('目标 URL')
+})
+
+test('AI 生成页：未配置模型时提示且不可生成', async ({ page }) => {
+  await page.goto('/generate')
+  await expect(page.getByTestId('no-model')).toContainText('未配置大模型')
+  await page.getByTestId('fill-example').click()
+  await expect(page.getByTestId('generate')).toBeDisabled()
+})

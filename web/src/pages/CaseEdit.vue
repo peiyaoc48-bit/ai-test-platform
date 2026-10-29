@@ -15,11 +15,14 @@ const form = reactive<CaseInput>({
 })
 const error = ref('')
 const saving = ref(false)
+// 编辑模式下等数据加载完再渲染表单，避免加载结果覆盖用户已输入的内容
+const loaded = ref(!props.id)
 
 onMounted(async () => {
   if (!props.id) return
   const c = await api.getCase(Number(props.id))
   Object.assign(form, { name: c.name, description: c.description, url: c.url, steps: c.steps })
+  loaded.value = true
 })
 
 async function save() {
@@ -46,7 +49,7 @@ async function save() {
       </div>
     </div>
     <div v-if="error" class="alert error" data-test="form-error">{{ error }}</div>
-    <form @submit.prevent="save">
+    <form @submit.prevent="save" v-if="loaded">
       <div class="card">
         <h2>基本信息</h2>
         <div class="field">
