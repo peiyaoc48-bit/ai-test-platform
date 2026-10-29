@@ -9,6 +9,7 @@ const config = ref<PlatformConfig | null>(null)
 onMounted(async () => (config.value = await api.config()))
 const navs = [
   { key: 'cases', to: '/cases', label: '用例管理' },
+  { key: 'generate', to: '/generate', label: 'AI 生成用例' },
   { key: 'reports', to: '/reports', label: '测试报告' },
 ]
 </script>

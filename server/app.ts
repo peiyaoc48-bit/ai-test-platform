@@ -9,7 +9,8 @@ import type { DB } from './db.js'
 import { createCase, deleteCase, getCase, listCases, updateCase } from './repo/cases.js'
 import { createRun, getRun, getStats, listRuns } from './repo/runs.js'
 import type { Executor } from './runner/executor.js'
-import { resolveUrl, validateCase, ValidationError } from './validate.js'
+import { generateDrafts } from './ai/generate.js'
+import { isValidTargetUrl, resolveUrl, validateCase, ValidationError } from './validate.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
@@ -22,6 +23,8 @@ export interface AppOptions {
   /** 生产模式下托管前端构建产物 */
   webDist?: string
   logger?: boolean
+  /** 测试时注入假的 fetch */
+  fetchImpl?: typeof fetch
 }
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
@@ -87,6 +90,23 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return getStats(db, { days: Math.min(Number(q.days) || 14, 365), caseId: q.caseId ? Number(q.caseId) : undefined })
   })
   app.get('/api/runs/:id', async (req) => getRun(db, idParam(req)) ?? Promise.reject(notFound('运行记录')))
+
+  // —— AI 生成用例（只返回草稿，用户审核后再调用 POST /api/cases 入库）——
+  app.post('/api/generate', async (req) => {
+    const b = (req.body ?? {}) as { requirement?: unknown; url?: unknown }
+    const requirement = typeof b.requirement === 'string' ? b.requirement.trim() : ''
+    const url = typeof b.url === 'string' && b.url.trim() ? b.url.trim() : '{{DEMO}}/index.html'
+    if (requirement.length < 10) throw new ValidationError('需求描述太短，请至少写 10 个字')
+    if (requirement.length > 8000) throw new ValidationError('需求描述不能超过 8000 字')
+    if (!isValidTargetUrl(url)) throw new ValidationError('目标 URL 不合法')
+    const m = modelConfig()
+    return generateDrafts(
+      { configured: m.configured, baseUrl: m.baseUrl, apiKey: m.apiKey, model: m.genModel, timeoutMs: m.timeoutMs },
+      requirement,
+      url,
+      opts.fetchImpl,
+    )
+  })
 
   if (opts.webDist && fs.existsSync(opts.webDist)) {
     await app.register(fastifyStatic, { root: opts.webDist, prefix: '/', decorateReply: false, wildcard: false })

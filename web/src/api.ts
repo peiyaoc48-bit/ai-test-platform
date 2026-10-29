@@ -1,5 +1,11 @@
 import type { CaseInput, Stats, PlatformConfig, RunDetail, RunSummary, TestCase } from '../../shared/types'
 
+export interface GenerateResult {
+  drafts: CaseInput[]
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number }
+  model: string
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -23,6 +29,7 @@ export const api = {
   getRun: (id: number) => request<RunDetail>('GET', `/api/runs/${id}`),
   listRuns: (caseId?: number, limit = 50) =>
     request<RunSummary[]>('GET', `/api/runs?limit=${limit}${caseId ? `&caseId=${caseId}` : ''}`),
+  generate: (requirement: string, url: string) => request<GenerateResult>('POST', '/api/generate', { requirement, url }),
   stats: (days: number, caseId?: number) =>
     request<Stats>('GET', `/api/stats?days=${days}${caseId ? `&caseId=${caseId}` : ''}`),
 }
