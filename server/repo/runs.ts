@@ -1,4 +1,4 @@
-import type { RunDetail, RunStatus, RunSummary, StepResult, TestCase } from '../../shared/types.js'
+import type { DailyStat, RunDetail, RunStatus, RunSummary, Stats, StepResult, TestCase } from '../../shared/types.js'
 import type { DB } from '../db.js'
 
 // 运行列表需要的步骤聚合统计
@@ -112,4 +112,58 @@ export function failInterruptedRuns(db: DB) {
   db.prepare(`UPDATE run_steps SET status = 'not_run' WHERE status IN ('pending', 'running')
     AND run_id IN (SELECT id FROM runs WHERE status IN ('queued', 'running'))`).run()
   db.prepare(`UPDATE runs SET status = 'error', error = '平台重启，运行被中断' WHERE status IN ('queued', 'running')`).run()
+}
+
+/** 运行统计：只统计已结束的运行；通过率 = 通过 / (通过 + 失败 + 异常) */
+export function getStats(db: DB, opts: { days?: number; caseId?: number } = {}): Stats {
+  const days = opts.days ?? 14
+  const filter = `status NOT IN ('queued', 'running')
+    AND started_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
+    ${opts.caseId ? 'AND case_id = ?' : ''}`
+  const params: unknown[] = [`-${days} days`, ...(opts.caseId ? [opts.caseId] : [])]
+
+  const t = db
+    .prepare(
+      `SELECT COUNT(*) AS total,
+         COALESCE(SUM(status = 'passed'), 0) AS passed,
+         COALESCE(SUM(status IN ('failed', 'error')), 0) AS failed,
+         COALESCE(AVG(duration_ms), 0) AS avg_ms
+       FROM runs WHERE ${filter}`,
+    )
+    .get(...params) as any
+  const usage = db
+    .prepare(
+      `SELECT COALESCE(SUM(ai_calls), 0) AS calls, COALESCE(SUM(tokens), 0) AS tokens
+       FROM run_steps WHERE run_id IN (SELECT id FROM runs WHERE ${filter})`,
+    )
+    .get(...params) as any
+  const daily = (
+    db
+      .prepare(
+        `SELECT date(started_at, 'localtime') AS d, COUNT(*) AS runs,
+           SUM(status = 'passed') AS passed, SUM(status IN ('passed', 'failed', 'error')) AS decided,
+           AVG(duration_ms) AS avg_ms
+         FROM runs WHERE ${filter} GROUP BY d ORDER BY d`,
+      )
+      .all(...params) as any[]
+  ).map(
+    (r): DailyStat => ({
+      date: r.d,
+      runs: r.runs,
+      passed: r.passed,
+      passRate: r.decided ? r.passed / r.decided : null,
+      avgDurationMs: Math.round(r.avg_ms),
+    }),
+  )
+  const decided = t.passed + t.failed
+  return {
+    totalRuns: t.total,
+    passedRuns: t.passed,
+    failedRuns: t.failed,
+    passRate: decided ? t.passed / decided : null,
+    avgDurationMs: Math.round(t.avg_ms),
+    aiCalls: usage.calls,
+    tokens: usage.tokens,
+    daily,
+  }
 }

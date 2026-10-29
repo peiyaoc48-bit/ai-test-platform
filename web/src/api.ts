@@ -1,4 +1,4 @@
-import type { CaseInput, PlatformConfig, RunDetail, RunSummary, TestCase } from '../../shared/types'
+import type { CaseInput, Stats, PlatformConfig, RunDetail, RunSummary, TestCase } from '../../shared/types'
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
@@ -21,5 +21,8 @@ export const api = {
   deleteCase: (id: number) => request<void>('DELETE', `/api/cases/${id}`),
   runCase: (id: number) => request<{ runId: number }>('POST', `/api/cases/${id}/run`),
   getRun: (id: number) => request<RunDetail>('GET', `/api/runs/${id}`),
-  listRuns: (caseId?: number) => request<RunSummary[]>('GET', `/api/runs${caseId ? `?caseId=${caseId}` : ''}`),
+  listRuns: (caseId?: number, limit = 50) =>
+    request<RunSummary[]>('GET', `/api/runs?limit=${limit}${caseId ? `&caseId=${caseId}` : ''}`),
+  stats: (days: number, caseId?: number) =>
+    request<Stats>('GET', `/api/stats?days=${days}${caseId ? `&caseId=${caseId}` : ''}`),
 }

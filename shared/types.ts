@@ -66,6 +66,26 @@ export interface RunDetail extends RunSummary {
   midsceneReport?: string | null
 }
 
+export interface DailyStat {
+  date: string
+  runs: number
+  passed: number
+  /** 通过运行数 / 有结论的运行数（排除全部跳过） */
+  passRate: number | null
+  avgDurationMs: number
+}
+
+export interface Stats {
+  totalRuns: number
+  passedRuns: number
+  failedRuns: number
+  passRate: number | null
+  avgDurationMs: number
+  aiCalls: number
+  tokens: number
+  daily: DailyStat[]
+}
+
 export interface PlatformConfig {
   modelConfigured: boolean
   modelName: string | null

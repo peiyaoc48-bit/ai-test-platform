@@ -7,7 +7,7 @@ import type { PlatformConfig } from '../shared/types.js'
 import { demoBaseUrl, modelConfig } from './config.js'
 import type { DB } from './db.js'
 import { createCase, deleteCase, getCase, listCases, updateCase } from './repo/cases.js'
-import { createRun, getRun, listRuns } from './repo/runs.js'
+import { createRun, getRun, getStats, listRuns } from './repo/runs.js'
 import type { Executor } from './runner/executor.js'
 import { resolveUrl, validateCase, ValidationError } from './validate.js'
 
@@ -81,6 +81,10 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   app.get('/api/runs', async (req) => {
     const q = req.query as { caseId?: string; limit?: string }
     return listRuns(db, { caseId: q.caseId ? Number(q.caseId) : undefined, limit: Math.min(Number(q.limit) || 50, 500) })
+  })
+  app.get('/api/stats', async (req) => {
+    const q = req.query as { days?: string; caseId?: string }
+    return getStats(db, { days: Math.min(Number(q.days) || 14, 365), caseId: q.caseId ? Number(q.caseId) : undefined })
   })
   app.get('/api/runs/:id', async (req) => getRun(db, idParam(req)) ?? Promise.reject(notFound('运行记录')))
 
