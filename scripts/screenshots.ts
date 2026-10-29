@@ -1,0 +1,46 @@
+// 生成 README 截图：npx tsx scripts/screenshots.ts <平台地址> [假模型实例地址]
+import { chromium } from 'playwright'
+
+const base = process.argv[2] ?? 'http://localhost:5173'
+const mockBase = process.argv[3]
+const out = 'docs/screenshots'
+
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'chrome' })
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 })
+const shot = async (name: string, fullPage = false) => {
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: `${out}/${name}.png`, fullPage })
+}
+
+await page.goto(`${base}/cases`)
+await shot('cases')
+await page.goto(`${base}/cases/2/edit`)
+await shot('case-edit')
+
+const runs = await (await page.request.get(`${base}/api/runs?limit=200`)).json()
+const failed = runs.find((r: any) => r.status === 'failed')
+const passed = runs.find((r: any) => r.status === 'passed' && r.skipped > 0) ?? runs.find((r: any) => r.status === 'passed')
+if (failed) {
+  await page.goto(`${base}/runs/${failed.id}`)
+  await shot('run-failed', true)
+}
+if (passed) {
+  await page.goto(`${base}/runs/${passed.id}`)
+  await shot('run-passed', true)
+}
+await page.goto(`${base}/reports`)
+await page.hover('svg path.col >> nth=5').catch(() => {})
+await shot('reports')
+await page.goto(`${base}/generate`)
+await page.click('[data-test=fill-example]')
+await shot('generate-no-model')
+
+if (mockBase) {
+  await page.goto(`${mockBase}/generate`)
+  await page.click('[data-test=fill-example]')
+  await page.click('[data-test=generate]')
+  await page.waitForSelector('[data-test=draft]')
+  await shot('generate-drafts', true)
+}
+await browser.close()
+console.log('done')
