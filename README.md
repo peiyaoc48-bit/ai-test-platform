@@ -6,16 +6,17 @@
 
 > 定位：帮团队从“手工点页面”过渡到自动化，让不熟悉代码的测试同学先用自然语言写用例，稳定之后再沉淀成选择器脚本。
 
-![用例管理](docs/screenshots/cases.png)
+![概览](docs/screenshots/dashboard.png)
 
 ## 功能
 
 | 模块 | 说明 |
 |---|---|
-| 用例管理 | 新建 / 编辑 / 删除用例；一个用例 = 目标 URL + 步骤列表；步骤有五种：AI 操作（`aiAct`）、AI 断言（`aiAssert`）、AI 提取（`aiQuery`）、Playwright 代码片段、接口请求；数据存在 SQLite |
+| 概览 | 近 7 天运行数、通过率（与上周对比）、平均耗时与模型 token；最近失败的用例；**不稳定用例识别**（参考 Allure TestOps：最近 10 次运行中通过 / 失败切换 ≥ 2 次）；用例的步骤构成 |
+| 用例管理 | 搜索与筛选（步骤类型、最近结果）；新建 / 编辑 / 删除用例，代码与 YAML 步骤带语法高亮，步骤可拖拽排序，⌘S 保存，“保存并运行”；一个用例 = 目标 URL + 步骤列表；步骤有五种：AI 操作（`aiAct`）、AI 断言（`aiAssert`）、AI 提取（`aiQuery`）、Playwright 代码片段、接口请求；数据存在 SQLite |
 | 接口测试 | 接口步骤用 YAML 描述 `method / url / headers / json`，断言状态码、响应耗时、响应头和 JSON 字段（`eq / exists / contains / len / gt / lt / type`），用 `extract` 提取变量供后续步骤引用（接口关联）。纯接口用例不启动浏览器，报告展示请求与响应（鉴权头脱敏） |
 | 一键执行 | 后端用 Playwright 驱动 Chrome 执行；运行进入串行队列异步执行，前端每 0.8 秒轮询一次，实时看到每一步的状态。未配置模型时自然语言步骤标记为“跳过（未配置模型）”，代码步骤照常执行 |
-| 测试报告 | 每一步都记录状态、耗时、截图（失败步骤大图展示）、模型调用次数和 token；报告页有运行通过率、平均耗时、每日通过率趋势、最近 30 次耗时柱状图和历史运行列表，可按用例和时间范围筛选 |
+| 测试报告 | 运行详情参考 Playwright Trace Viewer：左侧步骤时间线（状态与耗时条），右侧为选中步骤的代码、错误、请求 / 响应和截图，自动定位到失败步骤，↑ ↓ 切换；每一步都记录状态、耗时、截图、模型调用次数和 token；报告页有运行通过率、平均耗时、每日通过率趋势、最近 30 次耗时柱状图和历史运行列表，可按用例和时间范围筛选 |
 | 环境 | 每个环境配置基础地址、变量、Chromium 启动参数（如模拟摄像头）、权限、预置 localStorage、单步超时；顶栏切换当前环境，用例集可设默认环境，CI 脚本支持 `--env`。用例 URL 写成 `{{BASE_URL}}/login`，换环境不用改用例；运行时保存环境快照，历史报告可追溯 |
 | 鲁棒性对比 | 变更注入：在测试浏览器里去掉 `data-test` 等测试标记，或换一套视觉样式（不改被测系统）。一键让同一用例在“无变更 / 去掉测试标记 / 更换视觉样式”下各跑一次（失败后继续执行），矩阵对比每一步、每种写法的存活率 |
 | AI 兜底（自愈） | 代码步骤可附一句自然语言描述：选择器失效导致失败时，改由视觉模型按描述执行；通过则标记“已自愈”，并提示更新选择器 |
@@ -44,7 +45,7 @@ npm run dev
 ## 测试
 
 ```bash
-npm test            # vitest：131 条单元 / 集成测试
+npm test            # vitest：138 条单元 / 集成测试
 ```
 
 ```bash
@@ -115,10 +116,10 @@ server/
   demo-api.ts         演示站点后端（登录鉴权 + 待办增删改查）
   runner/ai.ts        Midscene Agent 工厂（可替换，便于测试）
   ai/generate.ts      需求 → 用例草稿（提示词、调用、解析）
-  repo/               SQLite 读写与统计
+  repo/               SQLite 读写、统计与概览（不稳定用例识别）
   demo-site/          演示被测站点
 shared/types.ts     前后端共用的类型
-web/src/            Vue 页面与组件（含手写的 SVG 趋势图）
+web/src/            Vue 页面与组件（含手写的 SVG 趋势图、CodeMirror 编辑器、提示与确认弹窗）
 tests/unit/         vitest
 e2e/                平台自身的 Playwright E2E 与假模型
 api-tests/          Python 接口自动化（pytest + requests）
@@ -129,13 +130,17 @@ examples/proctor/   实战：测试毕设“在线考试智能监考系统”
 
 ## 截图
 
-| 运行失败：错误信息 + 失败截图 | 运行通过：AI 步骤因未配置模型被跳过 |
+| 用例管理：搜索、筛选、批量运行 | 用例编辑：代码 / YAML 高亮、拖拽排序、AI 兜底 |
+|---|---|
+| ![](docs/screenshots/cases.png) | ![](docs/screenshots/case-edit.png) |
+
+| 运行失败：步骤时间线 + 错误与截图 | 运行通过：AI 步骤因未配置模型被跳过 |
 |---|---|
 | ![](docs/screenshots/run-failed.png) | ![](docs/screenshots/run-passed.png) |
 
-| 测试报告 | 用例编辑 |
+| 测试报告 | 环境列表 |
 |---|---|
-| ![](docs/screenshots/reports.png) | ![](docs/screenshots/case-edit.png) |
+| ![](docs/screenshots/reports.png) | ![](docs/screenshots/environments.png) |
 
 | 鲁棒性对比：去掉测试标记后选择器全部失效 | 环境配置（毕设：模拟摄像头、权限、预置协议标记） |
 |---|---|

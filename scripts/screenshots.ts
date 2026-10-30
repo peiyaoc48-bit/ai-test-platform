@@ -6,12 +6,14 @@ const mockBase = process.argv[3]
 const out = 'docs/screenshots'
 
 const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'chrome' })
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 })
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
 const shot = async (name: string, fullPage = false) => {
   await page.waitForTimeout(400)
   await page.screenshot({ path: `${out}/${name}.png`, fullPage })
 }
 
+await page.goto(`${base}/dashboard`)
+await shot('dashboard')
 await page.goto(`${base}/cases`)
 await shot('cases')
 await page.goto(`${base}/cases/2/edit`)
@@ -22,11 +24,11 @@ const failed = runs.find((r: any) => r.status === 'failed')
 const passed = runs.find((r: any) => r.status === 'passed' && r.skipped > 0) ?? runs.find((r: any) => r.status === 'passed')
 if (failed) {
   await page.goto(`${base}/runs/${failed.id}`)
-  await shot('run-failed', true)
+  await shot('run-failed')
 }
 if (passed) {
   await page.goto(`${base}/runs/${passed.id}`)
-  await shot('run-passed', true)
+  await shot('run-passed')
 }
 const apiRun = runs.find((r: any) => r.caseName.includes('（接口）') && r.status === 'passed')
 if (apiRun) {
