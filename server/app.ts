@@ -10,6 +10,7 @@ import { createCase, deleteCase, getCase, listCases, updateCase } from './repo/c
 import { createRun, getRun, getStats, listRuns } from './repo/runs.js'
 import { createBatch, createSuite, deleteSuite, getBatch, getSuite, listBatches, listSuites, updateSuite } from './repo/suites.js'
 import { toJUnit } from './report/junit.js'
+import { exportPlaywright } from './report/export.js'
 import type { Executor } from './runner/executor.js'
 import { generateDrafts } from './ai/generate.js'
 import { isMutation } from './runner/mutations.js'
@@ -96,8 +97,27 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const prepareEnv = (envId: number | null) => {
     const env = envId ? snapshot(getEnvironment(db, envId)!) : null
     const vars = buildVars({ DEMO: demoBaseUrl(opts.port), DEMO_API: `http://127.0.0.1:${opts.port}/demo-api` }, env)
-    return { env, resolve: (url: string) => (url ? resolveTemplate(url, vars) : '') }
+    return { env, vars, resolve: (url: string) => (url ? resolveTemplate(url, vars) : '') }
   }
+
+  // 清除某个用例的 Midscene 缓存（页面改版后缓存的定位可能失效）
+  app.delete('/api/cases/:id/ai-cache', async (req, reply) => {
+    const id = idParam(req)
+    if (opts.midsceneDir) fs.rmSync(path.join(opts.midsceneDir, 'cache', `case-${id}.cache.yaml`), { force: true })
+    reply.status(204).send()
+  })
+
+  // 导出为 Playwright 测试文件；?envId= 指定按哪个环境展开地址与浏览器配置
+  app.get('/api/cases/:id/export', async (req, reply) => {
+    const tc = getCase(db, idParam(req))
+    if (!tc) throw notFound('用例')
+    const { env, vars, resolve } = prepareEnv(parseEnvId((req.query as any)?.envId, envExists))
+    const file = `case-${tc.id}.spec.ts`
+    reply
+      .type('text/plain; charset=utf-8')
+      .header('content-disposition', `attachment; filename="${file}"`)
+      .send(exportPlaywright(tc, { url: resolve(tc.url), env, fixedVars: vars }))
+  })
 
   // —— 执行与报告 ——
   app.post('/api/cases/:id/run', async (req, reply) => {

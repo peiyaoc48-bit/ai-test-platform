@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api'
 import type { TestCase } from '../../../shared/types'
 import { RUN_STATUS_LABEL, formatTime } from '../format'
+import { currentEnvId } from '../env-store'
 
 const router = useRouter()
 const cases = ref<TestCase[]>([])
@@ -86,7 +87,7 @@ onMounted(load)
             <th>目标 URL</th>
             <th style="width: 150px">步骤</th>
             <th style="width: 170px">最近运行</th>
-            <th style="width: 290px"></th>
+            <th style="width: 340px"></th>
           </tr>
         </thead>
         <tbody>
@@ -115,6 +116,7 @@ onMounted(load)
                 <button class="btn sm primary" @click="run(c)" data-test="run">▶ 运行</button>
                 <button class="btn sm" v-if="c.steps.some((s) => s.type !== 'api')" @click="robustness(c)" data-test="robustness" title="分别在无变更、去掉测试标记、更换视觉样式下运行，对比哪些步骤失效">鲁棒性</button>
                 <RouterLink class="btn sm" :to="`/cases/${c.id}/edit`" data-test="edit">编辑</RouterLink>
+                <a class="btn sm" :href="`/api/cases/${c.id}/export${currentEnvId ? `?envId=${currentEnvId}` : ''}`" data-test="export" title="导出为可独立运行的 Playwright 测试文件（按当前环境展开）">导出</a>
                 <button class="btn sm danger" @click="remove(c)" data-test="delete">删除</button>
               </div>
             </td>

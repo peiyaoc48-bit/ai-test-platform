@@ -16,6 +16,8 @@ export const config = {
   headless: env.HEADLESS !== 'false',
   /** 单个步骤的超时（AI 步骤除外，AI 步骤受模型超时控制） */
   stepTimeoutMs: Number(env.STEP_TIMEOUT_MS || 15_000),
+  /** Midscene 缓存：重复运行同一用例时复用 AI 规划与定位结果，减少模型调用 */
+  aiCache: env.AI_CACHE !== 'false',
 }
 
 /** 每次读取，便于测试中修改环境变量 */

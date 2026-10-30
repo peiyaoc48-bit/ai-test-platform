@@ -10,15 +10,17 @@ export interface AiAgent {
   finalizeReport?(): Promise<string | undefined>
 }
 
-export type AgentFactory = (page: Page, runId: number) => Promise<AiAgent>
+/** cacheId：开启 Midscene 缓存（按用例缓存规划结果与元素定位）；不传则不缓存 */
+export type AgentFactory = (page: Page, runId: number, opts?: { cacheId?: string }) => Promise<AiAgent>
 
 /** 默认工厂：懒加载 @midscene/web，按运行生成一份回放报告 */
-export const midsceneAgentFactory: AgentFactory = async (page, runId) => {
+export const midsceneAgentFactory: AgentFactory = async (page, runId, opts = {}) => {
   const { PlaywrightAgent } = await import('@midscene/web/playwright')
   return new PlaywrightAgent(page, {
     generateReport: true,
     autoPrintReportMsg: false,
     reportFileName: `run-${runId}`,
+    ...(opts.cacheId ? { cache: { id: opts.cacheId, strategy: 'read-write' as const } } : {}),
   }) as unknown as AiAgent
 }
 

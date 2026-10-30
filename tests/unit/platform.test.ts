@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { AddressInfo } from 'node:net'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../server/app'
@@ -19,6 +21,7 @@ let modelOn = false
 let artifactsDir: string
 let port = 0
 const agentCalls: string[] = []
+const factoryOpts: ({ cacheId?: string } | undefined)[] = []
 
 /** 假 Agent：每次调用计 1 次模型、100 token；内容含“失败”的断言会抛错 */
 function fakeAgent(): AiAgent {
@@ -49,7 +52,10 @@ beforeAll(async () => {
     browserChannel: process.env.BROWSER_CHANNEL ?? 'chrome',
     stepTimeoutMs: 3000,
     modelConfigured: () => modelOn,
-    agentFactory: async () => fakeAgent(),
+    agentFactory: async (_page, _runId, o) => {
+      factoryOpts.push(o)
+      return fakeAgent()
+    },
     templateVars: () => ({ DEMO: `http://127.0.0.1:${port}/demo`, DEMO_API: `http://127.0.0.1:${port}/demo-api` }),
   })
   // 先监听拿到端口，演示站点地址依赖端口
@@ -71,6 +77,7 @@ beforeEach(() => {
   db.exec('DELETE FROM runs; DELETE FROM batches; DELETE FROM suites; DELETE FROM cases; DELETE FROM environments;')
   modelOn = false
   agentCalls.length = 0
+  factoryOpts.length = 0
 })
 
 const api = async <T = any>(method: string, url: string, payload?: unknown) => {
@@ -406,11 +413,53 @@ describe('AI 兜底（自愈）', () => {
     expect(agentCalls).toHaveLength(1)
   })
 
+  it('Midscene 缓存按用例区分；变更注入的运行不使用缓存', async () => {
+    modelOn = true
+    const c = await create({ name: '缓存', description: '', url: '{{DEMO}}/index.html', steps: [{ type: 'ai_assert', content: '页面有登录按钮' }] })
+    await api('POST', `/api/cases/${c.id}/robustness`, {})
+    await executor.idle()
+    expect(factoryOpts.map((o) => o?.cacheId)).toEqual([`case-${c.id}`, undefined, undefined])
+  })
+
   it('只有代码步骤可以设置兜底', async () => {
     const r = await api('POST', '/api/cases', { name: 'x', url: '{{DEMO}}/index.html', steps: [{ type: 'ai_action', content: 'a', fallback: { type: 'ai_assert', content: 'b' } }] })
     expect(r.status).toBe(400)
     expect(r.body.error).toContain('只有代码步骤')
   })
+})
+
+describe('导出 Playwright 脚本', () => {
+  it('导出的文件可以作为独立的 Playwright 测试跑通（代码用例、接口用例、动态变量）', async () => {
+    const ids = [
+      (await create(SAMPLE_CASES[0])).id,
+      (await create(SAMPLE_CASES[3])).id,
+      (
+        await create({
+          name: '动态变量',
+          description: '',
+          url: '',
+          steps: [{ type: 'api', content: 'method: POST\nurl: "{{DEMO_API}}/login"\njson: { username: demo, password: demo123 }\nextract: { token: token }' },
+            { type: 'api', content: 'method: POST\nurl: "{{DEMO_API}}/todos"\nheaders: { Authorization: "Bearer {{token}}" }\njson: { text: "t-{{$timestamp}}" }\nexpect: { status: 201, json: { text: { contains: "t-" } } }' }],
+        })
+      ).id,
+    ]
+    const dir = path.resolve('.export-check', `vitest-${process.pid}`)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'playwright.config.ts'), `export default { testDir: '.', use: { channel: ${JSON.stringify(process.env.BROWSER_CHANNEL ?? 'chrome')} || undefined }, reporter: 'line' }`)
+    for (const id of ids) {
+      const res = await app.inject({ method: 'GET', url: `/api/cases/${id}/export` })
+      expect(res.headers['content-disposition']).toContain(`case-${id}.spec.ts`)
+      fs.writeFileSync(path.join(dir, `case-${id}.spec.ts`), res.body)
+    }
+    try {
+      // 必须异步执行：平台服务就在本进程里，同步等待会让它无法响应导出脚本的请求
+      await promisify(execFile)('npx', ['playwright', 'test', '-c', dir], { timeout: 120_000, env: { ...process.env, MIDSCENE_MODEL_API_KEY: '' } })
+    } catch (e: any) {
+      throw new Error(`导出的脚本运行失败：\n${e.stdout?.toString() ?? ''}${e.stderr?.toString() ?? ''}`)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 150_000)
 })
 
 describe('用例集与批量运行', () => {

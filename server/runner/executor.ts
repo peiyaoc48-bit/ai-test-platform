@@ -24,6 +24,8 @@ export interface ExecutorOptions {
   agentFactory?: AgentFactory
   /** 模板变量（如 DEMO、DEMO_API），供接口步骤的 {{变量}} 使用 */
   templateVars?: () => Record<string, string>
+  /** 是否开启 Midscene 缓存（默认开启）；变更注入的运行始终不用缓存，避免缓存的定位结果干扰对比 */
+  aiCache?: boolean
 }
 
 /**
@@ -86,6 +88,8 @@ export class Executor {
   }
 
   private async execute(runId: number) {
+    const cacheId = (r: { caseId: number; mutation?: string }) =>
+      this.opts.aiCache !== false && (r.mutation ?? 'none') === 'none' ? `case-${r.caseId}` : undefined
     const { db } = this.opts
     const run = getRun(db, runId)
     if (!run) return
@@ -170,7 +174,7 @@ export class Executor {
             output = r
           } else if (isAi) {
             const p = await ensurePage()
-            agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId)
+            agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId, { cacheId: cacheId(run) })
             output = await runAiStep(agent, step.type, step.content)
             if (step.type === 'ai_query') vars[`step${i + 1}`] = output
             else output = undefined
@@ -182,7 +186,7 @@ export class Executor {
               // 自愈：代码步骤失败（多为选择器失效），若配置了 AI 兜底且有模型，改用视觉模型按描述执行
               if (e instanceof NavigationError || !step.fallback) throw e
               if (!this.opts.modelConfigured()) throw new Error(`${formatError(e)}\n（已设置 AI 兜底，但未配置模型，无法自愈）`)
-              agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId)
+              agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId, { cacheId: cacheId(run) })
               try {
                 await runAiStep(agent, step.fallback.type, step.fallback.content)
               } catch (aiErr) {
