@@ -75,18 +75,26 @@ export function parseApiSpec(content: string): ApiSpec {
   return { ...raw, method }
 }
 
-/** 替换 {{变量}}：对象和数组递归处理；整串是单个变量时保留原类型 */
+/** 动态变量：每次引用生成新值，用于造不重复的测试数据（如注册账号） */
+const DYNAMIC: Record<string, () => string | number> = {
+  $timestamp: () => Date.now(),
+  $randomInt: () => Math.floor(Math.random() * 900_000) + 100_000,
+  $uuid: () => crypto.randomUUID(),
+}
+
+function lookup(vars: Record<string, unknown>, name: string) {
+  const v = name in DYNAMIC ? DYNAMIC[name]() : getPath(vars, name)
+  if (v === undefined) throw new Error(`变量 {{${name}}} 未定义`)
+  return v
+}
+
+/** 替换 {{变量}}：对象和数组递归处理；整串是单个变量时保留原类型；支持 {{$timestamp}} / {{$randomInt}} / {{$uuid}} */
 export function render<T>(value: T, vars: Record<string, unknown>): T {
   if (typeof value === 'string') {
-    const whole = /^\{\{\s*([\w.]+)\s*\}\}$/.exec(value)
-    if (whole) {
-      const v = getPath(vars, whole[1])
-      if (v === undefined) throw new Error(`变量 {{${whole[1]}}} 未定义`)
-      return v as T
-    }
-    return value.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, name) => {
-      const v = getPath(vars, name)
-      if (v === undefined) throw new Error(`变量 {{${name}}} 未定义`)
+    const whole = /^\{\{\s*(\$?[\w.]+)\s*\}\}$/.exec(value)
+    if (whole) return lookup(vars, whole[1]) as T
+    return value.replace(/\{\{\s*(\$?[\w.]+)\s*\}\}/g, (_, name) => {
+      const v = lookup(vars, name)
       return typeof v === 'string' ? v : JSON.stringify(v)
     }) as T
   }

@@ -25,6 +25,13 @@ describe('render', () => {
     expect(render('{{id}}', vars)).toBe(7)
     expect(render({ a: ['/todos/{{ id }}', '{{user.name}}'] }, vars)).toEqual({ a: ['/todos/7', 'demo'] })
   })
+  it('动态变量每次生成新值', () => {
+    const a = render('stu{{$timestamp}}', {})
+    expect(a).toMatch(/^stu\d{13}$/)
+    expect(render('{{$randomInt}}', {})).toBeGreaterThanOrEqual(100000)
+    expect(render('{{$uuid}}', {})).not.toBe(render('{{$uuid}}', {}))
+  })
+
   it('未定义变量直接报错，而不是发出带 {{x}} 的请求', () => {
     expect(() => render('{{nope}}', vars)).toThrow('变量 {{nope}} 未定义')
     expect(() => render('a/{{nope}}', vars)).toThrow('未定义')

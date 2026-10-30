@@ -69,7 +69,7 @@ function remove(i: number) {
     </div>
     <div class="hint" style="margin-top: 10px">
       代码步骤可使用 <code>page</code>（Playwright Page）、<code>expect</code>（@playwright/test）和 <code>vars</code>（AI 提取步骤的结果按步骤序号存为 <code>vars.step3</code>，接口步骤 <code>extract</code> 的变量按名字存放）。
-      接口步骤用 YAML 描述，可引用 <code v-pre>{{DEMO_API}}</code> 和前面步骤提取的变量；断言支持 <code>status</code>、<code>maxMs</code>、<code>headers</code>、<code>bodyContains</code>，以及 <code>json</code> 字段的 <code>eq / exists / contains / len / gt / lt / type</code>。
+      接口步骤用 YAML 描述，可引用 <code v-pre>{{DEMO_API}}</code>、环境变量、前面步骤提取的变量，以及动态变量 <code v-pre>{{$timestamp}}</code> / <code v-pre>{{$randomInt}}</code> / <code v-pre>{{$uuid}}</code>；断言支持 <code>status</code>、<code>maxMs</code>、<code>headers</code>、<code>bodyContains</code>，以及 <code>json</code> 字段的 <code>eq / exists / contains / len / gt / lt / type</code>。
     </div>
   </div>
 </template>
