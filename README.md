@@ -41,11 +41,12 @@ npm run dev
 - 浏览器默认用本机安装的 **Google Chrome**（`BROWSER_CHANNEL=chrome`），不用另外下载 Chromium。没有 Chrome 时，先执行 `npx playwright install chromium`，再在 `.env` 里写 `BROWSER_CHANNEL=`。
 - 配置模型：复制 `.env.example` 为 `.env`，填写 `MIDSCENE_MODEL_BASE_URL / MIDSCENE_MODEL_API_KEY / MIDSCENE_MODEL_NAME`，然后重启。用阿里云百炼时，可以用通用地址或工作空间专属地址；视觉模型响应慢，`MIDSCENE_MODEL_TIMEOUT` 建议设为 120000。`.env` 已加入 `.gitignore`。
 - 生产方式运行：`npm run build && npm start`，由同一个端口（默认 3100）同时提供前端、API 和演示站点。
+- 部署到服务器：`docker compose up -d --build`，配合 Nginx + HTTPS，详见 [deploy/README.md](deploy/README.md)。公网部署时设置 `ACCESS_CODE`（登录后可编辑）和 `PUBLIC_DEMO=true`（访客只读浏览、可运行示例用例）。
 
 ## 测试
 
 ```bash
-npm test            # vitest：138 条单元 / 集成测试
+npm test            # vitest：143 条单元 / 集成测试
 ```
 
 ```bash

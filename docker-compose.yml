@@ -1,0 +1,19 @@
+# 生产部署：docker compose up -d --build
+# 端口只绑定本机回环地址，对外由 Nginx 提供 HTTPS
+services:
+  platform:
+    build: .
+    image: ai-test-platform:latest
+    container_name: ai-test-platform
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./data:/data
+    # Chromium 需要较大的共享内存，默认 64MB 容易崩溃
+    shm_size: 1gb
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
