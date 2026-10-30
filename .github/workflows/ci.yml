@@ -1,0 +1,65 @@
+# 每次推送 / PR：类型检查 → 单元测试 → 平台 E2E → Python 接口测试 → 用平台跑“冒烟”用例集（平台测自己 + 测演示站点）
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # CI 上没有 Google Chrome，改用 Playwright 自带的 Chromium
+      BROWSER_CHANNEL: ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: api-tests/requirements.txt
+
+      - name: 安装依赖
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          python -m venv api-tests/.venv
+          api-tests/.venv/bin/pip install -r api-tests/requirements.txt
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 单元 / 集成测试（vitest）
+        run: npm test
+
+      - name: 平台 E2E（Playwright）
+        run: npm run test:e2e
+
+      - name: 接口自动化（pytest）
+        run: cd api-tests && .venv/bin/pytest --junitxml=../reports/pytest-junit.xml --alluredir=../reports/allure-results
+
+      - name: 用平台执行“冒烟”用例集
+        run: |
+          PORT=3100 DATA_DIR=/tmp/platform-data NODE_ENV=production npx tsx server/index.ts &
+          npx --yes wait-on@8 http://127.0.0.1:3100/api/config
+          npm run ci:run -- --server http://127.0.0.1:3100 --suite 冒烟 --junit reports/smoke-junit.xml
+
+      - name: 上传测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            reports/
+            playwright-report/
+            test-results/
+          retention-days: 7
