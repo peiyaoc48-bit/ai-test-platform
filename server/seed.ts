@@ -1,5 +1,6 @@
 import type { CaseInput } from '../shared/types.js'
 import { createCase, countCases } from './repo/cases.js'
+import { createSuite } from './repo/suites.js'
 import type { DB } from './db.js'
 
 /** 示例用例：针对自带演示站点 {{DEMO}}，覆盖纯选择器、混合、纯自然语言、纯接口四种写法 */
@@ -100,5 +101,7 @@ expect:
 
 export function seedIfEmpty(db: DB) {
   if (countCases(db) > 0) return
-  for (const c of SAMPLE_CASES) createCase(db, c)
+  const ids = SAMPLE_CASES.map((c) => createCase(db, c).id)
+  // 默认“冒烟”用例集：不依赖模型的三条用例（选择器、选择器 + 视觉断言、纯接口），CI 中用它做回归
+  createSuite(db, { name: '冒烟', description: '离线可跑的核心链路，CI 默认执行', caseIds: [ids[0], ids[1], ids[3]] })
 }

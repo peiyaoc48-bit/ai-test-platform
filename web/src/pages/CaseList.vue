@@ -7,6 +7,7 @@ import { RUN_STATUS_LABEL, formatTime } from '../format'
 
 const router = useRouter()
 const cases = ref<TestCase[]>([])
+const picked = ref<number[]>([])
 const loading = ref(true)
 const error = ref('')
 
@@ -31,6 +32,11 @@ async function run(c: TestCase) {
   router.push(`/runs/${runId}`)
 }
 
+async function runPicked() {
+  const { batchId } = await api.runBatch(picked.value)
+  router.push(`/batches/${batchId}`)
+}
+
 const aiCount = (c: TestCase) => c.steps.filter((s) => s.type.startsWith('ai_')).length
 const apiCount = (c: TestCase) => c.steps.filter((s) => s.type === 'api').length
 
@@ -44,13 +50,17 @@ onMounted(load)
         <h1>用例管理</h1>
         <div class="sub">一个用例 = 目标 URL + 步骤列表；步骤可以是自然语言（交给 Midscene 视觉模型）或 Playwright 代码。</div>
       </div>
-      <RouterLink class="btn primary" to="/cases/new" data-test="new-case">+ 新建用例</RouterLink>
+      <div style="display: flex; gap: 8px">
+        <button class="btn" :disabled="!picked.length" @click="runPicked" data-test="run-picked">▶ 批量运行所选（{{ picked.length }}）</button>
+        <RouterLink class="btn primary" to="/cases/new" data-test="new-case">+ 新建用例</RouterLink>
+      </div>
     </div>
     <div v-if="error" class="alert error">{{ error }}</div>
     <div class="card flush">
       <table class="table" data-test="case-table">
         <thead>
           <tr>
+            <th style="width: 36px"></th>
             <th style="width: 56px">ID</th>
             <th>用例名称</th>
             <th>目标 URL</th>
@@ -61,6 +71,7 @@ onMounted(load)
         </thead>
         <tbody>
           <tr v-for="c in cases" :key="c.id" data-test="case-row">
+            <td><input type="checkbox" :value="c.id" v-model="picked" data-test="pick" /></td>
             <td class="num muted">#{{ c.id }}</td>
             <td>
               <div data-test="case-name">{{ c.name }}</div>

@@ -118,3 +118,31 @@ test('保存时校验接口步骤的 YAML', async ({ page }) => {
   await page.getByTestId('save-case').click()
   await expect(page.getByTestId('form-error')).toContainText('第 1 步接口定义有误：缺少 url')
 })
+
+test('用例集：新建 → 运行 → 批次汇总与 JUnit 下载', async ({ page }) => {
+  await page.goto('/suites')
+  await page.getByTestId('new-suite').click()
+  await page.getByTestId('suite-name').fill('E2E 冒烟')
+  await page.getByTestId('suite-case').filter({ hasText: '登录成功并添加待办' }).locator('input').check()
+  await page.getByTestId('suite-case').filter({ hasText: '待办接口' }).locator('input').check()
+  await page.getByTestId('save-suite').click()
+
+  await page.getByTestId('suite-row').filter({ hasText: 'E2E 冒烟' }).getByTestId('run-suite').click()
+  await expect(page).toHaveURL(/\/batches\/\d+$/)
+  await expect(page.getByTestId('batch-status')).toHaveText('通过', { timeout: 30_000 })
+  await expect(page.getByTestId('batch-run')).toHaveCount(2)
+
+  const download = page.waitForEvent('download')
+  await page.getByTestId('junit').click()
+  expect((await download).suggestedFilename()).toMatch(/^batch-\d+-junit\.xml$/)
+})
+
+test('用例列表勾选多个用例批量运行', async ({ page }) => {
+  await page.goto('/cases')
+  await expect(page.getByTestId('run-picked')).toBeDisabled()
+  await row(page, '待办接口').getByTestId('pick').check()
+  await row(page, '错误密码提示').getByTestId('pick').check()
+  await page.getByTestId('run-picked').click()
+  await expect(page.getByTestId('batch-status')).toHaveText('通过', { timeout: 30_000 })
+  await expect(page.getByTestId('batch-run')).toHaveCount(2)
+})

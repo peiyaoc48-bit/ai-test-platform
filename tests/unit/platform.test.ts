@@ -68,7 +68,7 @@ afterAll(async () => {
 })
 
 beforeEach(() => {
-  db.exec('DELETE FROM runs; DELETE FROM cases;')
+  db.exec('DELETE FROM runs; DELETE FROM batches; DELETE FROM suites; DELETE FROM cases;')
   modelOn = false
   agentCalls.length = 0
 })
@@ -246,6 +246,55 @@ describe('接口步骤', () => {
       ],
     })
     expect((await runAndWait(c.id)).status).toBe('passed')
+  })
+})
+
+describe('用例集与批量运行', () => {
+  it('运行用例集：按顺序排队执行，批次汇总状态并可导出 JUnit', async () => {
+    const pass = await create(SAMPLE_CASES[0])
+    const fail = await create({ name: '会失败', description: '', url: '{{DEMO}}/index.html', steps: [{ type: 'code', content: 'throw new Error("boom")' }] })
+    const suite = (await api('POST', '/api/suites', { name: '回归', caseIds: [fail.id, pass.id] })).body
+    expect(suite.caseIds).toEqual([fail.id, pass.id])
+
+    const started = await api('POST', `/api/suites/${suite.id}/run`, { trigger: 'ci' })
+    expect(started.status).toBe(202)
+    expect(started.body.runIds).toHaveLength(2)
+    await executor.idle()
+
+    const batch = (await api('GET', `/api/batches/${started.body.batchId}`)).body
+    expect(batch).toMatchObject({ status: 'failed', trigger: 'ci', total: 2, passed: 1, failed: 1, suiteId: suite.id })
+    expect(batch.runs.map((r: any) => r.caseName)).toEqual(['会失败', SAMPLE_CASES[0].name])
+    expect(batch.durationMs).toBeGreaterThan(0)
+
+    const junit = await app.inject({ method: 'GET', url: `/api/batches/${batch.id}/junit` })
+    expect(junit.headers['content-type']).toContain('application/xml')
+    expect(junit.body).toContain('tests="2" failures="1"')
+    expect(junit.body).toContain('boom')
+
+    const listed = (await api('GET', '/api/suites')).body
+    expect(listed[0].lastBatch.id).toBe(batch.id)
+  })
+
+  it('勾选多个用例临时批量运行；用例被删除后用例集仍可运行剩余用例', async () => {
+    const a = await create(SAMPLE_CASES[3])
+    const b = await create(SAMPLE_CASES[3])
+    const adhoc = await api('POST', '/api/batches', { caseIds: [a.id, b.id] })
+    expect(adhoc.status).toBe(202)
+    await executor.idle()
+    expect((await api('GET', `/api/batches/${adhoc.body.batchId}`)).body.status).toBe('passed')
+
+    const suite = (await api('POST', '/api/suites', { name: 's', caseIds: [a.id, b.id] })).body
+    await api('DELETE', `/api/cases/${a.id}`)
+    const r = await api('POST', `/api/suites/${suite.id}/run`)
+    expect(r.body.runIds).toHaveLength(1)
+    await executor.idle()
+  })
+
+  it('参数校验与 404', async () => {
+    expect((await api('POST', '/api/suites', { name: 'x', caseIds: [999] })).body.error).toContain('不存在')
+    expect((await api('POST', '/api/batches', { caseIds: [] })).status).toBe(400)
+    expect((await api('POST', '/api/suites/999/run')).status).toBe(404)
+    expect((await api('GET', '/api/batches/999/junit')).status).toBe(404)
   })
 })
 

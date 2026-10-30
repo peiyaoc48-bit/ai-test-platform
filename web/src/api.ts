@@ -1,3 +1,4 @@
+import type { BatchDetail, BatchSummary, Suite, SuiteInput } from '../../shared/types'
 import type { CaseInput, Stats, PlatformConfig, RunDetail, RunSummary, TestCase } from '../../shared/types'
 
 export interface GenerateResult {
@@ -30,6 +31,15 @@ export const api = {
   listRuns: (caseId?: number, limit = 50) =>
     request<RunSummary[]>('GET', `/api/runs?limit=${limit}${caseId ? `&caseId=${caseId}` : ''}`),
   generate: (requirement: string, url: string) => request<GenerateResult>('POST', '/api/generate', { requirement, url }),
+  listSuites: () => request<Suite[]>('GET', '/api/suites'),
+  getSuite: (id: number) => request<Suite>('GET', `/api/suites/${id}`),
+  createSuite: (s: SuiteInput) => request<Suite>('POST', '/api/suites', s),
+  updateSuite: (id: number, s: SuiteInput) => request<Suite>('PUT', `/api/suites/${id}`, s),
+  deleteSuite: (id: number) => request<void>('DELETE', `/api/suites/${id}`),
+  runSuite: (id: number) => request<{ batchId: number; runIds: number[] }>('POST', `/api/suites/${id}/run`, {}),
+  runBatch: (caseIds: number[]) => request<{ batchId: number; runIds: number[] }>('POST', '/api/batches', { caseIds }),
+  listBatches: () => request<BatchSummary[]>('GET', '/api/batches'),
+  getBatch: (id: number) => request<BatchDetail>('GET', `/api/batches/${id}`),
   stats: (days: number, caseId?: number) =>
     request<Stats>('GET', `/api/stats?days=${days}${caseId ? `&caseId=${caseId}` : ''}`),
 }

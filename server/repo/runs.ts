@@ -20,6 +20,7 @@ const toSummary = (r: any): RunSummary => ({
   startedAt: r.started_at,
   finishedAt: r.finished_at,
   durationMs: r.duration_ms,
+  batchId: r.batch_id ?? null,
   passed: r.passed,
   failed: r.failed,
   skipped: r.skipped,
@@ -98,9 +99,12 @@ export function getRun(db: DB, runId: number): RunDetail | null {
   return { ...toSummary(row), url: row.url, steps, midsceneReport: row.midscene_report }
 }
 
-export function listRuns(db: DB, opts: { caseId?: number; limit?: number } = {}): RunSummary[] {
-  const where = opts.caseId ? 'WHERE r.case_id = ?' : ''
-  const params = opts.caseId ? [opts.caseId] : []
+export function listRuns(db: DB, opts: { caseId?: number; batchId?: number; limit?: number } = {}): RunSummary[] {
+  const conds: string[] = []
+  const params: unknown[] = []
+  if (opts.caseId) conds.push('r.case_id = ?'), params.push(opts.caseId)
+  if (opts.batchId) conds.push('r.batch_id = ?'), params.push(opts.batchId)
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
   const rows = db
     .prepare(`${SUMMARY_SQL} ${where} GROUP BY r.id ORDER BY r.id DESC LIMIT ?`)
     .all(...params, opts.limit ?? 50)

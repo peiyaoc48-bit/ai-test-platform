@@ -30,6 +30,24 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS idx_runs_case ON runs(case_id, id);
 
+CREATE TABLE IF NOT EXISTS suites (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  case_ids    TEXT NOT NULL,              -- JSON: number[]，按执行顺序
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- 一次批量执行（用例集运行或勾选多个用例运行），包含多条 runs
+CREATE TABLE IF NOT EXISTS batches (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  suite_id   INTEGER REFERENCES suites(id) ON DELETE SET NULL,
+  name       TEXT NOT NULL,
+  trigger    TEXT NOT NULL DEFAULT 'manual', -- manual / ci
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS run_steps (
   run_id      INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
   idx         INTEGER NOT NULL,
@@ -53,5 +71,15 @@ export function openDb(file: string): DB {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(SCHEMA)
+  migrate(db)
   return db
+}
+
+/** 旧库升级：按需补列，已存在则跳过 */
+function migrate(db: DB) {
+  const cols = (db.prepare('PRAGMA table_info(runs)').all() as { name: string }[]).map((c) => c.name)
+  if (!cols.includes('batch_id')) {
+    db.exec('ALTER TABLE runs ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL')
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_runs_batch ON runs(batch_id)')
 }

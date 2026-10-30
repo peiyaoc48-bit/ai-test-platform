@@ -77,6 +77,16 @@ class ApiClient:
                 raise TimeoutError(f"运行 #{run_id} 在 {timeout}s 内未结束，当前状态 {run['status']}")
             time.sleep(interval)
 
+    def wait_batch(self, batch_id: int, timeout: float = 120, interval: float = 0.5) -> dict:
+        deadline = time.monotonic() + timeout
+        while True:
+            batch = self.get(f"/api/batches/{batch_id}").json()
+            if batch["status"] != "running":
+                return batch
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"批次 #{batch_id} 在 {timeout}s 内未结束")
+            time.sleep(interval)
+
     def _attach(self, method: str, url: str, body: Any, resp: requests.Response) -> None:
         if allure is None:
             return

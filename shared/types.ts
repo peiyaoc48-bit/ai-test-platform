@@ -57,6 +57,7 @@ export interface RunSummary {
   aiCalls: number
   tokens: number
   error?: string | null
+  batchId?: number | null
 }
 
 export interface RunDetail extends RunSummary {
@@ -84,6 +85,38 @@ export interface Stats {
   aiCalls: number
   tokens: number
   daily: DailyStat[]
+}
+
+export interface Suite {
+  id: number
+  name: string
+  description: string
+  caseIds: number[]
+  createdAt: string
+  updatedAt: string
+  lastBatch?: BatchSummary | null
+}
+
+export type SuiteInput = Pick<Suite, 'name' | 'description' | 'caseIds'>
+
+export interface BatchSummary {
+  id: number
+  suiteId: number | null
+  name: string
+  trigger: 'manual' | 'ci'
+  createdAt: string
+  /** 由所含运行推导：有未结束的为 running，有失败 / 异常为 failed，全部跳过为 skipped */
+  status: RunStatus
+  total: number
+  passed: number
+  failed: number
+  skipped: number
+  /** 从第一条运行开始到最后一条结束的墙钟时间 */
+  durationMs: number
+}
+
+export interface BatchDetail extends BatchSummary {
+  runs: RunSummary[]
 }
 
 export interface PlatformConfig {

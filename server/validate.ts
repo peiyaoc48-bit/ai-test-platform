@@ -44,6 +44,29 @@ export function validateCase(body: unknown): CaseInput {
   return { name, description, url, steps }
 }
 
+/** 校验用例集输入；caseIds 去重并保持顺序 */
+export function validateSuite(body: unknown, caseExists: (id: number) => boolean) {
+  if (!body || typeof body !== 'object') throw new ValidationError('请求体必须是对象')
+  const b = body as Record<string, unknown>
+  const name = typeof b.name === 'string' ? b.name.trim() : ''
+  if (!name) throw new ValidationError('用例集名称不能为空')
+  if (name.length > 100) throw new ValidationError('用例集名称不能超过 100 个字符')
+  const caseIds = validateCaseIds(b.caseIds, caseExists)
+  const description = typeof b.description === 'string' ? b.description.trim() : ''
+  return { name, description, caseIds }
+}
+
+export function validateCaseIds(raw: unknown, caseExists: (id: number) => boolean): number[] {
+  if (!Array.isArray(raw) || raw.length === 0) throw new ValidationError('至少选择一个用例')
+  if (raw.length > 200) throw new ValidationError('一次最多选择 200 个用例')
+  const ids = [...new Set(raw)]
+  for (const id of ids) {
+    if (!Number.isInteger(id) || (id as number) <= 0) throw new ValidationError(`用例 id 不合法：${JSON.stringify(id)}`)
+    if (!caseExists(id as number)) throw new ValidationError(`用例 #${id} 不存在`)
+  }
+  return ids as number[]
+}
+
 export function isValidTargetUrl(url: string) {
   if (url.startsWith('{{DEMO}}')) return true
   try {

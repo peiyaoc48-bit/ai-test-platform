@@ -8,10 +8,12 @@ import { demoBaseUrl, modelConfig } from './config.js'
 import type { DB } from './db.js'
 import { createCase, deleteCase, getCase, listCases, updateCase } from './repo/cases.js'
 import { createRun, getRun, getStats, listRuns } from './repo/runs.js'
+import { createBatch, createSuite, deleteSuite, getBatch, getSuite, listBatches, listSuites, updateSuite } from './repo/suites.js'
+import { toJUnit } from './report/junit.js'
 import type { Executor } from './runner/executor.js'
 import { generateDrafts } from './ai/generate.js'
 import { demoApi } from './demo-api.js'
-import { isValidTargetUrl, resolveUrl, validateCase, ValidationError } from './validate.js'
+import { isValidTargetUrl, resolveUrl, validateCase, validateCaseIds, validateSuite, ValidationError } from './validate.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
@@ -92,6 +94,56 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return getStats(db, { days: Math.min(Number(q.days) || 14, 365), caseId: q.caseId ? Number(q.caseId) : undefined })
   })
   app.get('/api/runs/:id', async (req) => getRun(db, idParam(req)) ?? Promise.reject(notFound('运行记录')))
+
+  // —— 用例集与批量执行 ——
+  const caseExists = (id: number) => getCase(db, id) !== null
+  const startBatch = (name: string, caseIds: number[], suiteId: number | null, trigger: unknown) => {
+    const cases = caseIds.map((id) => getCase(db, id)).filter((c): c is NonNullable<typeof c> => c !== null)
+    if (!cases.length) throw new ValidationError('用例集里的用例都已被删除')
+    const { batchId, runIds } = createBatch(db, {
+      name,
+      suiteId,
+      trigger: trigger === 'ci' ? 'ci' : 'manual',
+      cases,
+      resolveUrl: (url) => resolveUrl(url, demoBaseUrl(opts.port)),
+    })
+    runIds.forEach((id) => opts.executor.enqueue(id))
+    return { batchId, runIds }
+  }
+
+  app.get('/api/suites', async () => listSuites(db))
+  app.get('/api/suites/:id', async (req) => getSuite(db, idParam(req)) ?? Promise.reject(notFound('用例集')))
+  app.post('/api/suites', async (req, reply) => reply.status(201).send(createSuite(db, validateSuite(req.body, caseExists))))
+  app.put('/api/suites/:id', async (req) => updateSuite(db, idParam(req), validateSuite(req.body, caseExists)) ?? Promise.reject(notFound('用例集')))
+  app.delete('/api/suites/:id', async (req, reply) => {
+    if (!deleteSuite(db, idParam(req))) throw notFound('用例集')
+    reply.status(204).send()
+  })
+  // 运行用例集；CI 调用时传 { "trigger": "ci" }
+  app.post('/api/suites/:id/run', async (req, reply) => {
+    const suite = getSuite(db, idParam(req))
+    if (!suite) throw notFound('用例集')
+    reply.status(202).send(startBatch(suite.name, suite.caseIds, suite.id, (req.body as any)?.trigger))
+  })
+  // 临时批量运行：在用例列表勾选多个用例
+  app.post('/api/batches', async (req, reply) => {
+    const b = (req.body ?? {}) as { caseIds?: unknown; name?: unknown; trigger?: unknown }
+    const ids = validateCaseIds(b.caseIds, caseExists)
+    const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim().slice(0, 100) : `批量运行（${ids.length} 个用例）`
+    reply.status(202).send(startBatch(name, ids, null, b.trigger))
+  })
+  app.get('/api/batches', async () => listBatches(db))
+  app.get('/api/batches/:id', async (req) => getBatch(db, idParam(req)) ?? Promise.reject(notFound('批次')))
+  app.get('/api/batches/:id/junit', async (req, reply) => {
+    const batch = getBatch(db, idParam(req))
+    if (!batch) throw notFound('批次')
+    const runs = batch.runs.map((r) => getRun(db, r.id)!)
+    const origin = `${req.protocol}://${req.headers.host}`
+    reply
+      .type('application/xml; charset=utf-8')
+      .header('content-disposition', `attachment; filename="batch-${batch.id}-junit.xml"`)
+      .send(toJUnit(batch, runs, origin))
+  })
 
   // —— AI 生成用例（只返回草稿，用户审核后再调用 POST /api/cases 入库）——
   app.post('/api/generate', async (req) => {
