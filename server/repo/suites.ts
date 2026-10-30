@@ -1,4 +1,4 @@
-import type { BatchDetail, BatchSummary, RunStatus, Suite, SuiteInput, TestCase } from '../../shared/types.js'
+import type { BatchDetail, BatchSummary, EnvSnapshot, RunStatus, Suite, SuiteInput, TestCase } from '../../shared/types.js'
 import type { DB } from '../db.js'
 import { createRun, listRuns } from './runs.js'
 
@@ -7,6 +7,7 @@ interface SuiteRow {
   name: string
   description: string
   case_ids: string
+  env_id: number | null
   created_at: string
   updated_at: string
 }
@@ -16,6 +17,7 @@ const toSuite = (r: SuiteRow): Suite => ({
   name: r.name,
   description: r.description,
   caseIds: JSON.parse(r.case_ids),
+  envId: r.env_id ?? null,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 })
@@ -33,14 +35,16 @@ export function getSuite(db: DB, id: number): Suite | null {
 }
 
 export function createSuite(db: DB, s: SuiteInput): Suite {
-  const info = db.prepare('INSERT INTO suites (name, description, case_ids) VALUES (?, ?, ?)').run(s.name, s.description, JSON.stringify(s.caseIds))
+  const info = db
+    .prepare('INSERT INTO suites (name, description, case_ids, env_id) VALUES (?, ?, ?, ?)')
+    .run(s.name, s.description, JSON.stringify(s.caseIds), s.envId ?? null)
   return getSuite(db, Number(info.lastInsertRowid))!
 }
 
 export function updateSuite(db: DB, id: number, s: SuiteInput): Suite | null {
   const info = db
-    .prepare(`UPDATE suites SET name = ?, description = ?, case_ids = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`)
-    .run(s.name, s.description, JSON.stringify(s.caseIds), id)
+    .prepare(`UPDATE suites SET name = ?, description = ?, case_ids = ?, env_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`)
+    .run(s.name, s.description, JSON.stringify(s.caseIds), s.envId ?? null, id)
   return info.changes ? getSuite(db, id) : null
 }
 
@@ -51,7 +55,7 @@ export function deleteSuite(db: DB, id: number): boolean {
 /** 创建批次并为每个用例创建运行记录（同一事务），返回运行 id，交给执行队列 */
 export function createBatch(
   db: DB,
-  opts: { name: string; suiteId?: number | null; trigger?: 'manual' | 'ci'; cases: TestCase[]; resolveUrl: (url: string) => string },
+  opts: { name: string; suiteId?: number | null; trigger?: 'manual' | 'ci'; cases: TestCase[]; resolveUrl: (url: string) => string; env?: EnvSnapshot | null },
 ): { batchId: number; runIds: number[] } {
   return db.transaction(() => {
     const batchId = Number(
@@ -59,7 +63,7 @@ export function createBatch(
     )
     const setBatch = db.prepare('UPDATE runs SET batch_id = ? WHERE id = ?')
     const runIds = opts.cases.map((c) => {
-      const runId = createRun(db, c, opts.resolveUrl(c.url))
+      const runId = createRun(db, c, opts.resolveUrl(c.url), opts.env ?? null)
       setBatch.run(batchId, runId)
       return runId
     })

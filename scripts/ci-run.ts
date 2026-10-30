@@ -2,11 +2,11 @@
 //
 //   npx tsx scripts/ci-run.ts --server http://127.0.0.1:3100 --suite 冒烟 --junit reports/junit.xml
 //
-// --suite 可以是用例集 id 或名称；--timeout 单位秒（默认 600）。
+// --suite 可以是用例集 id 或名称；--env 指定环境（id 或名称，不填用用例集的默认环境）；--timeout 单位秒（默认 600）。
 import fs from 'node:fs'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
-import type { BatchDetail, Suite } from '../shared/types.js'
+import type { BatchDetail, Environment, Suite } from '../shared/types.js'
 
 const { values } = parseArgs({
   options: {
@@ -14,6 +14,7 @@ const { values } = parseArgs({
     suite: { type: 'string' },
     junit: { type: 'string' },
     timeout: { type: 'string', default: '600' },
+    env: { type: 'string' },
   },
 })
 if (!values.suite) {
@@ -39,7 +40,18 @@ if (!suite) {
   process.exit(2)
 }
 
-const { batchId } = await call<{ batchId: number }>('POST', `/api/suites/${suite.id}/run`, { trigger: 'ci' })
+let envId: number | undefined
+if (values.env) {
+  const envs = await call<Environment[]>('GET', '/api/environments')
+  const env = envs.find((e) => String(e.id) === values.env || e.name === values.env)
+  if (!env) {
+    console.error(`找不到环境“${values.env}”。现有：${envs.map((e) => `#${e.id} ${e.name}`).join('，') || '无'}`)
+    process.exit(2)
+  }
+  envId = env.id
+}
+
+const { batchId } = await call<{ batchId: number }>('POST', `/api/suites/${suite.id}/run`, { trigger: 'ci', ...(envId ? { envId } : {}) })
 console.log(`▶ 运行用例集 #${suite.id}「${suite.name}」，批次 #${batchId}：${server}/batches/${batchId}`)
 
 const deadline = Date.now() + Number(values.timeout) * 1000

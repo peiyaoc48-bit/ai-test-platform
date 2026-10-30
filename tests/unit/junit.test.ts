@@ -44,7 +44,7 @@ describe('deriveBatchStatus', () => {
 describe('validateSuite', () => {
   const exists = (id: number) => id < 10
   it('去重并保持顺序', () => {
-    expect(validateSuite({ name: ' 冒烟 ', caseIds: [3, 1, 3] }, exists)).toEqual({ name: '冒烟', description: '', caseIds: [3, 1] })
+    expect(validateSuite({ name: ' 冒烟 ', caseIds: [3, 1, 3] }, exists)).toEqual({ name: '冒烟', description: '', caseIds: [3, 1], envId: null })
   })
   it.each([
     [{ name: '', caseIds: [1] }, '名称不能为空'],

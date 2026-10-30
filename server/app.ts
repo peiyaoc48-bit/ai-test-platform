@@ -12,8 +12,10 @@ import { createBatch, createSuite, deleteSuite, getBatch, getSuite, listBatches,
 import { toJUnit } from './report/junit.js'
 import type { Executor } from './runner/executor.js'
 import { generateDrafts } from './ai/generate.js'
+import { buildVars, resolveTemplate } from './env.js'
+import { createEnvironment, deleteEnvironment, getEnvironment, listEnvironments, snapshot, updateEnvironment } from './repo/environments.js'
 import { demoApi } from './demo-api.js'
-import { isValidTargetUrl, resolveUrl, validateCase, validateCaseIds, validateSuite, ValidationError } from './validate.js'
+import { isValidTargetUrl, parseEnvId, validateCase, validateCaseIds, validateEnvironment, validateSuite, ValidationError } from './validate.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
@@ -77,11 +79,30 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     reply.status(204).send()
   })
 
+  // —— 环境 ——
+  const envExists = (id: number) => getEnvironment(db, id) !== null
+  app.get('/api/environments', async () => listEnvironments(db))
+  app.get('/api/environments/:id', async (req) => getEnvironment(db, idParam(req)) ?? Promise.reject(notFound('环境')))
+  app.post('/api/environments', async (req, reply) => reply.status(201).send(createEnvironment(db, validateEnvironment(req.body))))
+  app.put('/api/environments/:id', async (req) => updateEnvironment(db, idParam(req), validateEnvironment(req.body)) ?? Promise.reject(notFound('环境')))
+  app.delete('/api/environments/:id', async (req, reply) => {
+    if (!deleteEnvironment(db, idParam(req))) throw notFound('环境')
+    reply.status(204).send()
+  })
+
+  /** 取环境快照，并返回解析用例 URL 的函数（变量缺失时报 400） */
+  const prepareEnv = (envId: number | null) => {
+    const env = envId ? snapshot(getEnvironment(db, envId)!) : null
+    const vars = buildVars({ DEMO: demoBaseUrl(opts.port), DEMO_API: `http://127.0.0.1:${opts.port}/demo-api` }, env)
+    return { env, resolve: (url: string) => (url ? resolveTemplate(url, vars) : '') }
+  }
+
   // —— 执行与报告 ——
   app.post('/api/cases/:id/run', async (req, reply) => {
     const tc = getCase(db, idParam(req))
     if (!tc) throw notFound('用例')
-    const runId = createRun(db, tc, resolveUrl(tc.url, demoBaseUrl(opts.port)))
+    const { env, resolve } = prepareEnv(parseEnvId((req.body as any)?.envId, envExists))
+    const runId = createRun(db, tc, resolve(tc.url), env)
     opts.executor.enqueue(runId)
     reply.status(202).send({ runId })
   })
@@ -97,15 +118,18 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   // —— 用例集与批量执行 ——
   const caseExists = (id: number) => getCase(db, id) !== null
-  const startBatch = (name: string, caseIds: number[], suiteId: number | null, trigger: unknown) => {
+  const startBatch = (name: string, caseIds: number[], suiteId: number | null, trigger: unknown, envId: number | null) => {
     const cases = caseIds.map((id) => getCase(db, id)).filter((c): c is NonNullable<typeof c> => c !== null)
     if (!cases.length) throw new ValidationError('用例集里的用例都已被删除')
+    const { env, resolve } = prepareEnv(envId)
+    cases.forEach((c) => resolve(c.url)) // 先整体校验变量，避免只创建了一半的运行
     const { batchId, runIds } = createBatch(db, {
       name,
       suiteId,
       trigger: trigger === 'ci' ? 'ci' : 'manual',
       cases,
-      resolveUrl: (url) => resolveUrl(url, demoBaseUrl(opts.port)),
+      resolveUrl: resolve,
+      env,
     })
     runIds.forEach((id) => opts.executor.enqueue(id))
     return { batchId, runIds }
@@ -113,24 +137,26 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   app.get('/api/suites', async () => listSuites(db))
   app.get('/api/suites/:id', async (req) => getSuite(db, idParam(req)) ?? Promise.reject(notFound('用例集')))
-  app.post('/api/suites', async (req, reply) => reply.status(201).send(createSuite(db, validateSuite(req.body, caseExists))))
-  app.put('/api/suites/:id', async (req) => updateSuite(db, idParam(req), validateSuite(req.body, caseExists)) ?? Promise.reject(notFound('用例集')))
+  app.post('/api/suites', async (req, reply) => reply.status(201).send(createSuite(db, validateSuite(req.body, caseExists, envExists))))
+  app.put('/api/suites/:id', async (req) => updateSuite(db, idParam(req), validateSuite(req.body, caseExists, envExists)) ?? Promise.reject(notFound('用例集')))
   app.delete('/api/suites/:id', async (req, reply) => {
     if (!deleteSuite(db, idParam(req))) throw notFound('用例集')
     reply.status(204).send()
   })
-  // 运行用例集；CI 调用时传 { "trigger": "ci" }
+  // 运行用例集；CI 调用时传 { "trigger": "ci" }；envId 不传则用用例集的默认环境
   app.post('/api/suites/:id/run', async (req, reply) => {
     const suite = getSuite(db, idParam(req))
     if (!suite) throw notFound('用例集')
-    reply.status(202).send(startBatch(suite.name, suite.caseIds, suite.id, (req.body as any)?.trigger))
+    const body = (req.body ?? {}) as { trigger?: unknown; envId?: unknown }
+    const envId = body.envId !== undefined ? parseEnvId(body.envId, envExists) : suite.envId && envExists(suite.envId) ? suite.envId : null
+    reply.status(202).send(startBatch(suite.name, suite.caseIds, suite.id, body.trigger, envId))
   })
   // 临时批量运行：在用例列表勾选多个用例
   app.post('/api/batches', async (req, reply) => {
-    const b = (req.body ?? {}) as { caseIds?: unknown; name?: unknown; trigger?: unknown }
+    const b = (req.body ?? {}) as { caseIds?: unknown; name?: unknown; trigger?: unknown; envId?: unknown }
     const ids = validateCaseIds(b.caseIds, caseExists)
     const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim().slice(0, 100) : `批量运行（${ids.length} 个用例）`
-    reply.status(202).send(startBatch(name, ids, null, b.trigger))
+    reply.status(202).send(startBatch(name, ids, null, b.trigger, parseEnvId(b.envId, envExists)))
   })
   app.get('/api/batches', async () => listBatches(db))
   app.get('/api/batches/:id', async (req) => getBatch(db, idParam(req)) ?? Promise.reject(notFound('批次')))

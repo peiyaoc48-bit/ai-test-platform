@@ -2,21 +2,22 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
-import type { SuiteInput, TestCase } from '../../../shared/types'
+import type { Environment, SuiteInput, TestCase } from '../../../shared/types'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
 const cases = ref<TestCase[]>([])
-const form = reactive<SuiteInput>({ name: '', description: '', caseIds: [] })
+const form = reactive<SuiteInput>({ name: '', description: '', caseIds: [], envId: null })
+const envs = ref<Environment[]>([])
 const error = ref('')
 const loaded = ref(false)
 
 onMounted(async () => {
-  cases.value = await api.listCases()
+  ;[cases.value, envs.value] = await Promise.all([api.listCases(), api.listEnvs()])
   if (props.id) {
     const s = await api.getSuite(Number(props.id))
     // 已删除的用例不再显示
-    Object.assign(form, { name: s.name, description: s.description, caseIds: s.caseIds.filter((id) => cases.value.some((c) => c.id === id)) })
+    Object.assign(form, { name: s.name, description: s.description, envId: s.envId, caseIds: s.caseIds.filter((id) => cases.value.some((c) => c.id === id)) })
   }
   loaded.value = true
 })
@@ -46,7 +47,15 @@ async function save() {
     <form @submit.prevent="save">
       <div class="card">
         <div class="field"><label>名称</label><input class="input" v-model="form.name" data-test="suite-name" placeholder="例如：冒烟、每日回归" /></div>
-        <div class="field" style="margin-bottom: 0"><label>描述（可选）</label><input class="input" v-model="form.description" /></div>
+        <div class="field"><label>描述（可选）</label><input class="input" v-model="form.description" /></div>
+        <div class="field" style="margin-bottom: 0">
+          <label>默认环境</label>
+          <select class="select" v-model="form.envId" style="width: 280px" data-test="suite-env">
+            <option :value="null">默认（演示站点）</option>
+            <option v-for="e in envs" :key="e.id" :value="e.id">{{ e.name }}</option>
+          </select>
+          <div class="hint">CI 触发或在列表点“运行”时使用这个环境。</div>
+        </div>
       </div>
       <div class="card">
         <h2>选择用例 <span class="muted num" style="font-weight: 400">（已选 {{ form.caseIds.length }}，按勾选顺序执行）</span></h2>

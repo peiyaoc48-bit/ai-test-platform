@@ -103,5 +103,5 @@ export function seedIfEmpty(db: DB) {
   if (countCases(db) > 0) return
   const ids = SAMPLE_CASES.map((c) => createCase(db, c).id)
   // 默认“冒烟”用例集：不依赖模型的三条用例（选择器、选择器 + 视觉断言、纯接口），CI 中用它做回归
-  createSuite(db, { name: '冒烟', description: '离线可跑的核心链路，CI 默认执行', caseIds: [ids[0], ids[1], ids[3]] })
+  createSuite(db, { name: '冒烟', description: '离线可跑的核心链路，CI 默认执行', caseIds: [ids[0], ids[1], ids[3]], envId: null })
 }

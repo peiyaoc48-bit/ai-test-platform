@@ -1,4 +1,5 @@
-import type { BatchDetail, BatchSummary, Suite, SuiteInput } from '../../shared/types'
+import type { BatchDetail, BatchSummary, Environment, EnvironmentInput, Suite, SuiteInput } from '../../shared/types'
+import { currentEnvId } from './env-store'
 import type { CaseInput, Stats, PlatformConfig, RunDetail, RunSummary, TestCase } from '../../shared/types'
 
 export interface GenerateResult {
@@ -26,7 +27,8 @@ export const api = {
   createCase: (c: CaseInput) => request<TestCase>('POST', '/api/cases', c),
   updateCase: (id: number, c: CaseInput) => request<TestCase>('PUT', `/api/cases/${id}`, c),
   deleteCase: (id: number) => request<void>('DELETE', `/api/cases/${id}`),
-  runCase: (id: number) => request<{ runId: number }>('POST', `/api/cases/${id}/run`),
+  runCaseIn: (id: number, envId: number | null) => request<{ runId: number }>('POST', `/api/cases/${id}/run`, { envId }),
+  runCase: (id: number) => request<{ runId: number }>('POST', `/api/cases/${id}/run`, { envId: currentEnvId.value }),
   getRun: (id: number) => request<RunDetail>('GET', `/api/runs/${id}`),
   listRuns: (caseId?: number, limit = 50) =>
     request<RunSummary[]>('GET', `/api/runs?limit=${limit}${caseId ? `&caseId=${caseId}` : ''}`),
@@ -37,7 +39,12 @@ export const api = {
   updateSuite: (id: number, s: SuiteInput) => request<Suite>('PUT', `/api/suites/${id}`, s),
   deleteSuite: (id: number) => request<void>('DELETE', `/api/suites/${id}`),
   runSuite: (id: number) => request<{ batchId: number; runIds: number[] }>('POST', `/api/suites/${id}/run`, {}),
-  runBatch: (caseIds: number[]) => request<{ batchId: number; runIds: number[] }>('POST', '/api/batches', { caseIds }),
+  runBatch: (caseIds: number[]) => request<{ batchId: number; runIds: number[] }>('POST', '/api/batches', { caseIds, envId: currentEnvId.value }),
+  listEnvs: () => request<Environment[]>('GET', '/api/environments'),
+  getEnv: (id: number) => request<Environment>('GET', `/api/environments/${id}`),
+  createEnv: (e: EnvironmentInput) => request<Environment>('POST', '/api/environments', e),
+  updateEnv: (id: number, e: EnvironmentInput) => request<Environment>('PUT', `/api/environments/${id}`, e),
+  deleteEnv: (id: number) => request<void>('DELETE', `/api/environments/${id}`),
   listBatches: () => request<BatchSummary[]>('GET', '/api/batches'),
   getBatch: (id: number) => request<BatchDetail>('GET', `/api/batches/${id}`),
   stats: (days: number, caseId?: number) =>

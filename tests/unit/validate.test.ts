@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isValidTargetUrl, resolveUrl, validateCase, ValidationError } from '../../server/validate'
+import { isValidTargetUrl, resolveUrl, validateCase, validateEnvironment, ValidationError } from '../../server/validate'
+import { buildVars } from '../../server/env'
 
 const ok = { name: ' 登录 ', url: '{{DEMO}}/index.html', steps: [{ type: 'code', content: ' await page.click("a") ' }] }
 
@@ -55,5 +56,49 @@ describe('URL 处理', () => {
   it('替换开头的 {{DEMO}}，并去掉多余斜杠', () => {
     expect(resolveUrl('{{DEMO}}/index.html', 'http://127.0.0.1:3100/demo/')).toBe('http://127.0.0.1:3100/demo/index.html')
     expect(resolveUrl('https://a.com/{{DEMO}}', 'http://x')).toBe('https://a.com/{{DEMO}}')
+  })
+})
+
+describe('validateEnvironment', () => {
+  it('规整输入：去空白、权限去重、数字值转字符串', () => {
+    expect(
+      validateEnvironment({
+        name: ' 监考 ',
+        baseUrl: 'http://localhost:5174',
+        vars: { API: 'http://localhost:8081', RETRY: 3 },
+        launchArgs: [' --use-fake-device-for-media-stream '],
+        permissions: ['camera', 'camera'],
+        localStorage: { agreed: '1' },
+        stepTimeoutMs: '90000',
+      }),
+    ).toEqual({
+      name: '监考',
+      description: '',
+      baseUrl: 'http://localhost:5174',
+      vars: { API: 'http://localhost:8081', RETRY: '3' },
+      launchArgs: ['--use-fake-device-for-media-stream'],
+      permissions: ['camera'],
+      localStorage: { agreed: '1' },
+      stepTimeoutMs: 90000,
+    })
+  })
+  it.each([
+    [{ name: '' }, '环境名称不能为空'],
+    [{ name: 'a', baseUrl: 'localhost:5174' }, '基础地址'],
+    [{ name: 'a', vars: { '1x': 'v' } }, '变量名称不合法'],
+    [{ name: 'a', vars: { DEMO: 'v' } }, '内置变量'],
+    [{ name: 'a', vars: ['x'] }, '对象'],
+    [{ name: 'a', launchArgs: ['use-gl'] }, '以 -- 开头'],
+    [{ name: 'a', permissions: ['root'] }, '权限只能是'],
+    [{ name: 'a', stepTimeoutMs: 10 }, '1000 ~ 600000'],
+  ])('非法输入 %#', (body, msg) => expect(() => validateEnvironment(body)).toThrow(msg))
+})
+
+describe('buildVars', () => {
+  it('内置变量优先，BASE_URL 去掉末尾斜杠；未配置基础地址时不提供 BASE_URL', () => {
+    const env = { id: 1, name: 'e', description: '', baseUrl: 'http://a.test/', vars: { API: 'x' }, launchArgs: [], permissions: [], localStorage: {}, stepTimeoutMs: null }
+    expect(buildVars({ DEMO: 'd' }, env)).toEqual({ API: 'x', DEMO: 'd', BASE_URL: 'http://a.test' })
+    expect(buildVars({ DEMO: 'd' }, { ...env, baseUrl: '' })).not.toHaveProperty('BASE_URL')
+    expect(buildVars({ DEMO: 'd' }, null)).toEqual({ DEMO: 'd' })
   })
 })

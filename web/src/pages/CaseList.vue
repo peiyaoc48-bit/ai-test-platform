@@ -28,13 +28,23 @@ async function remove(c: TestCase) {
 }
 
 async function run(c: TestCase) {
-  const { runId } = await api.runCase(c.id)
-  router.push(`/runs/${runId}`)
+  error.value = ''
+  try {
+    const { runId } = await api.runCase(c.id)
+    router.push(`/runs/${runId}`)
+  } catch (e: any) {
+    error.value = e.message
+  }
 }
 
 async function runPicked() {
-  const { batchId } = await api.runBatch(picked.value)
-  router.push(`/batches/${batchId}`)
+  error.value = ''
+  try {
+    const { batchId } = await api.runBatch(picked.value)
+    router.push(`/batches/${batchId}`)
+  } catch (e: any) {
+    error.value = e.message
+  }
 }
 
 const aiCount = (c: TestCase) => c.steps.filter((s) => s.type.startsWith('ai_')).length
@@ -55,7 +65,7 @@ onMounted(load)
         <RouterLink class="btn primary" to="/cases/new" data-test="new-case">+ 新建用例</RouterLink>
       </div>
     </div>
-    <div v-if="error" class="alert error">{{ error }}</div>
+    <div v-if="error" class="alert error" data-test="list-error">{{ error }}</div>
     <div class="card flush">
       <table class="table" data-test="case-table">
         <thead>

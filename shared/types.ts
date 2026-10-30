@@ -58,6 +58,7 @@ export interface RunSummary {
   tokens: number
   error?: string | null
   batchId?: number | null
+  envName?: string | null
 }
 
 export interface RunDetail extends RunSummary {
@@ -65,6 +66,8 @@ export interface RunDetail extends RunSummary {
   steps: StepResult[]
   /** Midscene 回放报告（仅包含自然语言步骤时生成） */
   midsceneReport?: string | null
+  /** 运行时的环境快照 */
+  env?: EnvSnapshot | null
 }
 
 export interface DailyStat {
@@ -87,17 +90,43 @@ export interface Stats {
   daily: DailyStat[]
 }
 
+/** 运行环境：被测地址、变量与浏览器配置。运行时保存一份快照，历史报告不受后续修改影响 */
+export interface Environment {
+  id: number
+  name: string
+  description: string
+  /** 用例 URL 和接口步骤中可用 {{BASE_URL}} 引用 */
+  baseUrl: string
+  /** 自定义变量，可在 URL、接口步骤中用 {{名称}} 引用，代码步骤中用 vars.名称 读取 */
+  vars: Record<string, string>
+  /** Chromium 启动参数，如 --use-fake-device-for-media-stream */
+  launchArgs: string[]
+  /** 授予页面的权限，如 camera、microphone */
+  permissions: string[]
+  /** 页面脚本执行前预置的 localStorage（如“已同意协议”标记） */
+  localStorage: Record<string, string>
+  /** 单步超时（毫秒），不填用平台默认值 */
+  stepTimeoutMs: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type EnvironmentInput = Omit<Environment, 'id' | 'createdAt' | 'updatedAt'>
+export type EnvSnapshot = Omit<Environment, 'createdAt' | 'updatedAt'>
+
 export interface Suite {
   id: number
   name: string
   description: string
   caseIds: number[]
+  /** 运行用例集时默认使用的环境 */
+  envId: number | null
   createdAt: string
   updatedAt: string
   lastBatch?: BatchSummary | null
 }
 
-export type SuiteInput = Pick<Suite, 'name' | 'description' | 'caseIds'>
+export type SuiteInput = Pick<Suite, 'name' | 'description' | 'caseIds' | 'envId'>
 
 export interface BatchSummary {
   id: number

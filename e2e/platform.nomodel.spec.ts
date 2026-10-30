@@ -146,3 +146,36 @@ test('用例列表勾选多个用例批量运行', async ({ page }) => {
   await expect(page.getByTestId('batch-status')).toHaveText('通过', { timeout: 30_000 })
   await expect(page.getByTestId('batch-run')).toHaveCount(2)
 })
+
+test('环境：配置基础地址和预置本地存储，切换当前环境后运行用例', async ({ page, baseURL }) => {
+  await page.goto('/environments')
+  await page.getByTestId('new-env').click()
+  await page.getByTestId('env-name').fill('E2E 环境')
+  await page.getByTestId('env-base-url').fill(`${baseURL}/demo`)
+  await page.getByTestId('env-vars').fill('USER=demo')
+  await page.getByTestId('perm-camera').check()
+  await page.getByTestId('env-storage').fill('e2e-flag=on')
+  await page.getByTestId('save-env').click()
+  await page.getByTestId('env-row').filter({ hasText: 'E2E 环境' }).getByTestId('use-env').click()
+  await expect(page.getByTestId('env-select')).toHaveValue(/\d+/)
+
+  await page.goto('/cases/new')
+  await page.getByTestId('case-name-input').fill('E2E 按环境运行')
+  await page.getByTestId('case-url-input').fill('{{BASE_URL}}/index.html')
+  await page.getByTestId('step-remove').click()
+  await page.getByTestId('add-code-step').click()
+  await page.getByTestId('step-content').fill(
+    "if (await page.evaluate(() => localStorage.getItem('e2e-flag')) !== 'on') throw new Error('未预置')\nawait page.fill('[data-test=username]', vars.USER)",
+  )
+  await page.getByTestId('save-case').click()
+  await row(page, 'E2E 按环境运行').getByTestId('run').click()
+  await expect(page.getByTestId('run-status')).toHaveText('通过', { timeout: 30_000 })
+  await expect(page.getByTestId('run-env')).toHaveText('E2E 环境')
+
+  // 切回默认环境后，缺少 BASE_URL 时给出明确提示
+  await page.getByTestId('env-select').selectOption({ label: '默认（演示站点）' })
+  await page.goto('/cases')
+  page.once('dialog', (d) => d.dismiss())
+  await row(page, 'E2E 按环境运行').getByTestId('run').click()
+  await expect(page.getByTestId('list-error')).toContainText('{{BASE_URL}} 未定义')
+})

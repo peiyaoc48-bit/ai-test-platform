@@ -9,6 +9,8 @@ import Generate from './pages/Generate.vue'
 import Suites from './pages/Suites.vue'
 import SuiteEdit from './pages/SuiteEdit.vue'
 import BatchDetail from './pages/BatchDetail.vue'
+import Environments from './pages/Environments.vue'
+import EnvironmentEdit from './pages/EnvironmentEdit.vue'
 import './style.css'
 
 const router = createRouter({
@@ -22,6 +24,9 @@ const router = createRouter({
     { path: '/suites/new', component: SuiteEdit, meta: { nav: 'suites' } },
     { path: '/suites/:id/edit', component: SuiteEdit, props: true, meta: { nav: 'suites' } },
     { path: '/batches/:id', component: BatchDetail, props: true, meta: { nav: 'suites' } },
+    { path: '/environments', component: Environments, meta: { nav: 'envs' } },
+    { path: '/environments/new', component: EnvironmentEdit, meta: { nav: 'envs' } },
+    { path: '/environments/:id/edit', component: EnvironmentEdit, props: true, meta: { nav: 'envs' } },
     { path: '/generate', component: Generate, meta: { nav: 'generate' } },
     { path: '/reports', component: Reports, meta: { nav: 'reports' } },
     { path: '/runs/:id', component: RunDetail, props: true, meta: { nav: 'reports' } },

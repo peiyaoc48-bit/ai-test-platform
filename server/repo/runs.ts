@@ -1,4 +1,4 @@
-import type { DailyStat, RunDetail, RunStatus, RunSummary, Stats, StepResult, TestCase } from '../../shared/types.js'
+import type { DailyStat, EnvSnapshot, RunDetail, RunStatus, RunSummary, Stats, StepResult, TestCase } from '../../shared/types.js'
 import type { DB } from '../db.js'
 
 // 运行列表需要的步骤聚合统计
@@ -21,6 +21,7 @@ const toSummary = (r: any): RunSummary => ({
   finishedAt: r.finished_at,
   durationMs: r.duration_ms,
   batchId: r.batch_id ?? null,
+  envName: r.env_snapshot ? JSON.parse(r.env_snapshot).name : null,
   passed: r.passed,
   failed: r.failed,
   skipped: r.skipped,
@@ -35,11 +36,11 @@ export function rowToSummary(db: DB, row: { id: number }): RunSummary {
   return toSummary(db.prepare(`${SUMMARY_SQL} WHERE r.id = ? GROUP BY r.id`).get(row.id))
 }
 
-export function createRun(db: DB, tc: TestCase, resolvedUrl: string): number {
-  const insertRun = db.prepare(`INSERT INTO runs (case_id, case_name, url, status) VALUES (?, ?, ?, 'queued')`)
+export function createRun(db: DB, tc: TestCase, resolvedUrl: string, env: EnvSnapshot | null = null): number {
+  const insertRun = db.prepare(`INSERT INTO runs (case_id, case_name, url, status, env_snapshot) VALUES (?, ?, ?, 'queued', ?)`)
   const insertStep = db.prepare(`INSERT INTO run_steps (run_id, idx, type, content, status) VALUES (?, ?, ?, ?, 'pending')`)
   return db.transaction(() => {
-    const runId = Number(insertRun.run(tc.id, tc.name, resolvedUrl).lastInsertRowid)
+    const runId = Number(insertRun.run(tc.id, tc.name, resolvedUrl, env ? JSON.stringify(env) : null).lastInsertRowid)
     tc.steps.forEach((s, i) => insertStep.run(runId, i, s.type, s.content))
     return runId
   })()
@@ -96,7 +97,7 @@ export function getRun(db: DB, runId: number): RunDetail | null {
       tokens: s.tokens,
     }),
   )
-  return { ...toSummary(row), url: row.url, steps, midsceneReport: row.midscene_report }
+  return { ...toSummary(row), url: row.url, steps, midsceneReport: row.midscene_report, env: row.env_snapshot ? JSON.parse(row.env_snapshot) : null }
 }
 
 export function listRuns(db: DB, opts: { caseId?: number; batchId?: number; limit?: number } = {}): RunSummary[] {

@@ -32,7 +32,7 @@ async function load() {
 
 async function rerun() {
   if (!run.value) return
-  const { runId } = await api.runCase(run.value.caseId)
+  const { runId } = await api.runCaseIn(run.value.caseId, run.value.env?.id ?? null)
   router.push(`/runs/${runId}`)
 }
 
@@ -48,7 +48,7 @@ onBeforeUnmount(() => clearTimeout(timer))
           运行 <span class="num">#{{ run.id }}</span> · {{ run.caseName }}
           <span class="tag" :class="run.status" data-test="run-status" style="margin-left: 8px; vertical-align: 3px">{{ RUN_STATUS_LABEL[run.status] }}</span>
         </h1>
-        <div class="sub num">{{ run.url || "纯接口用例（未打开浏览器）" }} · 开始于 {{ formatTime(run.startedAt) }}</div>
+        <div class="sub num">{{ run.url || "纯接口用例（未打开浏览器）" }} · 环境：<span data-test="run-env">{{ run.env?.name ?? '默认' }}</span> · 开始于 {{ formatTime(run.startedAt) }}</div>
       </div>
       <div style="display: flex; gap: 8px">
         <a v-if="run.midsceneReport" class="btn" :href="`/midscene/${run.midsceneReport}`" target="_blank">Midscene 回放报告</a>

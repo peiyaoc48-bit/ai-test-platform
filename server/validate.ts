@@ -1,4 +1,4 @@
-import type { CaseInput, Step, StepType } from '../shared/types.js'
+import type { CaseInput, EnvironmentInput, Step, StepType } from '../shared/types.js'
 import { parseApiSpec } from './runner/api-step.js'
 
 const STEP_TYPES: StepType[] = ['ai_action', 'ai_assert', 'ai_query', 'code', 'api']
@@ -45,7 +45,7 @@ export function validateCase(body: unknown): CaseInput {
 }
 
 /** 校验用例集输入；caseIds 去重并保持顺序 */
-export function validateSuite(body: unknown, caseExists: (id: number) => boolean) {
+export function validateSuite(body: unknown, caseExists: (id: number) => boolean, envExists: (id: number) => boolean = () => true) {
   if (!body || typeof body !== 'object') throw new ValidationError('请求体必须是对象')
   const b = body as Record<string, unknown>
   const name = typeof b.name === 'string' ? b.name.trim() : ''
@@ -53,7 +53,17 @@ export function validateSuite(body: unknown, caseExists: (id: number) => boolean
   if (name.length > 100) throw new ValidationError('用例集名称不能超过 100 个字符')
   const caseIds = validateCaseIds(b.caseIds, caseExists)
   const description = typeof b.description === 'string' ? b.description.trim() : ''
-  return { name, description, caseIds }
+  const envId = parseEnvId(b.envId, envExists)
+  return { name, description, caseIds, envId }
+}
+
+/** 可选的环境 id：空值表示不使用环境（默认演示站点） */
+export function parseEnvId(raw: unknown, envExists: (id: number) => boolean): number | null {
+  if (raw === undefined || raw === null || raw === '') return null
+  const id = Number(raw)
+  if (!Number.isInteger(id) || id <= 0) throw new ValidationError('环境 id 不合法')
+  if (!envExists(id)) throw new ValidationError(`环境 #${id} 不存在`)
+  return id
 }
 
 export function validateCaseIds(raw: unknown, caseExists: (id: number) => boolean): number[] {
@@ -67,8 +77,71 @@ export function validateCaseIds(raw: unknown, caseExists: (id: number) => boolea
   return ids as number[]
 }
 
+const PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'clipboard-write']
+const RESERVED_VARS = ['DEMO', 'DEMO_API', 'BASE_URL']
+
+const strMap = (raw: unknown, what: string, keyRe?: RegExp) => {
+  if (raw === undefined || raw === null) return {}
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new ValidationError(`${what}需要是“名称: 值”的对象`)
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    if (keyRe && !keyRe.test(k)) throw new ValidationError(`${what}名称不合法：${k}（只能用字母、数字、下划线，且不能以数字开头）`)
+    if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') throw new ValidationError(`${what} ${k} 的值必须是字符串`)
+    out[k] = String(v)
+  }
+  return out
+}
+
+/** 校验并规整环境配置 */
+export function validateEnvironment(body: unknown): EnvironmentInput {
+  if (!body || typeof body !== 'object') throw new ValidationError('请求体必须是对象')
+  const b = body as Record<string, unknown>
+  const name = typeof b.name === 'string' ? b.name.trim() : ''
+  if (!name) throw new ValidationError('环境名称不能为空')
+  if (name.length > 50) throw new ValidationError('环境名称不能超过 50 个字符')
+
+  const baseUrl = typeof b.baseUrl === 'string' ? b.baseUrl.trim() : ''
+  if (baseUrl && !/^https?:\/\//.test(baseUrl) && !/^\{\{\s*\w+\s*\}\}/.test(baseUrl)) {
+    throw new ValidationError('基础地址需以 http:// 或 https:// 开头')
+  }
+
+  const vars = strMap(b.vars, '变量', /^[A-Za-z_]\w*$/)
+  for (const k of Object.keys(vars)) {
+    if (RESERVED_VARS.includes(k)) throw new ValidationError(`变量名 ${k} 是平台内置变量，不能覆盖`)
+  }
+
+  const launchArgs = b.launchArgs === undefined ? [] : b.launchArgs
+  if (!Array.isArray(launchArgs) || launchArgs.some((a) => typeof a !== 'string' || !a.trim().startsWith('--'))) {
+    throw new ValidationError('启动参数需要是以 -- 开头的字符串列表')
+  }
+  const permissions = b.permissions === undefined ? [] : b.permissions
+  if (!Array.isArray(permissions) || permissions.some((p) => !PERMISSIONS.includes(p as string))) {
+    throw new ValidationError(`权限只能是：${PERMISSIONS.join('、')}`)
+  }
+
+  let stepTimeoutMs: number | null = null
+  if (b.stepTimeoutMs !== undefined && b.stepTimeoutMs !== null && b.stepTimeoutMs !== '') {
+    stepTimeoutMs = Number(b.stepTimeoutMs)
+    if (!Number.isInteger(stepTimeoutMs) || stepTimeoutMs < 1000 || stepTimeoutMs > 600_000) {
+      throw new ValidationError('单步超时需在 1000 ~ 600000 毫秒之间')
+    }
+  }
+
+  return {
+    name,
+    description: typeof b.description === 'string' ? b.description.trim() : '',
+    baseUrl,
+    vars,
+    launchArgs: (launchArgs as string[]).map((a) => a.trim()),
+    permissions: [...new Set(permissions as string[])],
+    localStorage: strMap(b.localStorage, '本地存储'),
+    stepTimeoutMs,
+  }
+}
+
 export function isValidTargetUrl(url: string) {
-  if (url.startsWith('{{DEMO}}')) return true
+  // 以变量开头（{{DEMO}}、{{BASE_URL}} 等），运行时再按环境解析
+  if (/^\{\{\s*\w+\s*\}\}/.test(url)) return true
   try {
     const u = new URL(url)
     return u.protocol === 'http:' || u.protocol === 'https:'

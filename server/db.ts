@@ -30,6 +30,20 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS idx_runs_case ON runs(case_id, id);
 
+CREATE TABLE IF NOT EXISTS environments (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  name            TEXT NOT NULL,
+  description     TEXT NOT NULL DEFAULT '',
+  base_url        TEXT NOT NULL DEFAULT '',
+  vars            TEXT NOT NULL DEFAULT '{}',   -- JSON
+  launch_args     TEXT NOT NULL DEFAULT '[]',   -- JSON
+  permissions     TEXT NOT NULL DEFAULT '[]',   -- JSON
+  local_storage   TEXT NOT NULL DEFAULT '{}',   -- JSON
+  step_timeout_ms INTEGER,
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
 CREATE TABLE IF NOT EXISTS suites (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
@@ -81,5 +95,9 @@ function migrate(db: DB) {
   if (!cols.includes('batch_id')) {
     db.exec('ALTER TABLE runs ADD COLUMN batch_id INTEGER REFERENCES batches(id) ON DELETE SET NULL')
   }
+  // 运行时的环境快照（JSON），环境被修改或删除后历史报告仍可追溯
+  if (!cols.includes('env_snapshot')) db.exec('ALTER TABLE runs ADD COLUMN env_snapshot TEXT')
+  const suiteCols = (db.prepare('PRAGMA table_info(suites)').all() as { name: string }[]).map((c) => c.name)
+  if (!suiteCols.includes('env_id')) db.exec('ALTER TABLE suites ADD COLUMN env_id INTEGER REFERENCES environments(id) ON DELETE SET NULL')
   db.exec('CREATE INDEX IF NOT EXISTS idx_runs_batch ON runs(batch_id)')
 }

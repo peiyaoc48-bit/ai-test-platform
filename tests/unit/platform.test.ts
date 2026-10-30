@@ -68,7 +68,7 @@ afterAll(async () => {
 })
 
 beforeEach(() => {
-  db.exec('DELETE FROM runs; DELETE FROM batches; DELETE FROM suites; DELETE FROM cases;')
+  db.exec('DELETE FROM runs; DELETE FROM batches; DELETE FROM suites; DELETE FROM cases; DELETE FROM environments;')
   modelOn = false
   agentCalls.length = 0
 })
@@ -246,6 +246,67 @@ describe('接口步骤', () => {
       ],
     })
     expect((await runAndWait(c.id)).status).toBe('passed')
+  })
+})
+
+describe('环境配置', () => {
+  const mkEnv = async (patch: Record<string, unknown> = {}) =>
+    (
+      await api('POST', '/api/environments', {
+        name: '本地',
+        baseUrl: `http://127.0.0.1:${port}/demo`,
+        vars: { USER: 'demo' },
+        launchArgs: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+        permissions: ['camera'],
+        localStorage: { 'todo-flag': 'preset' },
+        stepTimeoutMs: 20000,
+        ...patch,
+      })
+    ).body
+
+  it('URL 用 {{BASE_URL}}，代码步骤读环境变量；权限、模拟摄像头、预置本地存储都生效', async () => {
+    const env = await mkEnv()
+    const c = await create({
+      name: '环境',
+      description: '',
+      url: '{{BASE_URL}}/index.html',
+      steps: [
+        { type: 'code', content: `await page.fill('[data-test=username]', vars.USER)\nawait page.fill('[data-test=password]', 'demo123')\nawait page.click('[data-test=submit]')\nawait expect(page.locator('[data-test=welcome]')).toContainText(vars.USER)` },
+        { type: 'code', content: `if (await page.evaluate(() => localStorage.getItem('todo-flag')) !== 'preset') throw new Error('本地存储未预置')` },
+        { type: 'code', content: `const n = await page.evaluate(async () => (await navigator.mediaDevices.getUserMedia({ video: true })).getVideoTracks().length)\nif (n !== 1) throw new Error('没有拿到模拟摄像头')` },
+        { type: 'api', content: 'url: "{{DEMO_API}}/login"\nmethod: POST\njson: { username: "{{USER}}", password: demo123 }\nexpect: { status: 200 }' },
+      ],
+    })
+    const { body } = await api('POST', `/api/cases/${c.id}/run`, { envId: env.id })
+    await executor.idle()
+    const run = (await api<RunDetail>('GET', `/api/runs/${body.runId}`)).body
+    expect(run.steps.map((s) => s.error ?? s.status)).toEqual(['passed', 'passed', 'passed', 'passed'])
+    expect(run.url).toBe(`http://127.0.0.1:${port}/demo/index.html`)
+    expect(run.envName).toBe('本地')
+
+    // 运行保存的是环境快照：之后修改环境不影响历史报告
+    await api('PUT', `/api/environments/${env.id}`, { ...env, name: '已改名' })
+    expect((await api<RunDetail>('GET', `/api/runs/${body.runId}`)).body.env?.name).toBe('本地')
+  })
+
+  it('变量缺失时拒绝运行并提示选择环境；不存在的环境 400', async () => {
+    const c = await create({ name: '缺变量', description: '', url: '{{BASE_URL}}/index.html', steps: [{ type: 'code', content: '1' }] })
+    const r = await api('POST', `/api/cases/${c.id}/run`, {})
+    expect(r.status).toBe(400)
+    expect(r.body.error).toContain('{{BASE_URL}} 未定义')
+    expect((await api('POST', `/api/cases/${c.id}/run`, { envId: 999 })).status).toBe(400)
+  })
+
+  it('用例集使用默认环境，运行时可覆盖', async () => {
+    const env = await mkEnv({ name: '集默认' })
+    const c = await create({ name: 'x', description: '', url: '{{BASE_URL}}/index.html', steps: [{ type: 'code', content: 'await page.title()' }] })
+    const suite = (await api('POST', '/api/suites', { name: 's', caseIds: [c.id], envId: env.id })).body
+    const started = (await api('POST', `/api/suites/${suite.id}/run`, {})).body
+    await executor.idle()
+    const batch = (await api('GET', `/api/batches/${started.batchId}`)).body
+    expect(batch.status).toBe('passed')
+    expect(batch.runs[0].envName).toBe('集默认')
+    expect((await api('POST', `/api/suites/${suite.id}/run`, { envId: null })).status).toBe(400) // 覆盖成无环境，缺 BASE_URL
   })
 })
 
