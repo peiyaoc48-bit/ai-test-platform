@@ -66,6 +66,7 @@ table.table { width: 100%; border-collapse: collapse; }
 .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 4px; font-size: 12px; background: #eef1f6; color: var(--muted); white-space: nowrap; }
 .tag.passed { background: var(--pass-soft); color: var(--pass); }
 .tag.failed, .tag.error { background: var(--fail-soft); color: var(--fail); }
+.tag.healed { background: #e9f2ff; color: #1b5fb4; }
 .tag.skipped { background: var(--skip-soft); color: var(--skip); }
 .tag.running, .tag.queued { background: var(--brand-soft); color: var(--run); }
 .tag.ai { background: #f0ebfd; color: #5b3cc4; }

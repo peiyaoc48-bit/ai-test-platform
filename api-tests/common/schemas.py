@@ -24,7 +24,7 @@ CASE = {
 }
 
 RUN_STATUS = {"enum": ["queued", "running", "passed", "failed", "error", "skipped"]}
-STEP_STATUS = {"enum": ["pending", "running", "passed", "failed", "skipped", "not_run"]}
+STEP_STATUS = {"enum": ["pending", "running", "passed", "healed", "failed", "skipped", "not_run"]}
 
 RUN = {
     "type": "object",

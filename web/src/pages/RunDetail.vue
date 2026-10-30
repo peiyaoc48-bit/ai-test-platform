@@ -14,9 +14,9 @@ const preview = ref<string | null>(null)
 let timer: number | undefined
 
 const active = computed(() => run.value && ['queued', 'running'].includes(run.value.status))
-const executed = computed(() => (run.value ? run.value.passed + run.value.failed : 0))
+const executed = computed(() => (run.value ? run.value.passed + run.value.healed + run.value.failed : 0))
 const passRate = computed(() =>
-  run.value && executed.value ? `${Math.round((run.value.passed / executed.value) * 100)}%` : '—',
+  run.value && executed.value ? `${Math.round(((run.value.passed + run.value.healed) / executed.value) * 100)}%` : '—',
 )
 
 async function load() {
@@ -59,6 +59,9 @@ onBeforeUnmount(() => clearTimeout(timer))
     </div>
 
     <div v-if="run.error" class="alert error">{{ run.error }}</div>
+    <div v-if="run.healed && !active" class="alert info" data-test="healed-banner">
+      {{ run.healed }} 个代码步骤失败后由 AI 兜底通过（自愈）。这通常说明选择器已经失效，建议按下方提示更新用例。
+    </div>
     <div v-if="run.skipped && !active" class="alert warn">
       {{ run.skipped }} 个自然语言步骤因未配置模型被跳过。在 <code>.env</code> 中填写 MIDSCENE_MODEL_* 后重启平台即可执行。
     </div>
@@ -84,7 +87,9 @@ onBeforeUnmount(() => clearTimeout(timer))
           </div>
           <pre v-if="s.type === 'code' || s.type === 'api'" class="code content">{{ s.content }}</pre>
           <div v-else class="content">{{ s.content }}</div>
-          <div v-if="s.error && s.status !== 'skipped'" class="err"><pre class="code">{{ s.error }}</pre></div>
+          <div v-if="s.fallback" class="muted" style="font-size: 12px; margin-top: 4px">AI 兜底（{{ s.fallback.type === 'ai_assert' ? '断言' : '操作' }}）：{{ s.fallback.content }}</div>
+          <div v-if="s.error && s.status === 'healed'" class="heal"><pre class="code">{{ s.error }}</pre></div>
+          <div v-else-if="s.error && s.status !== 'skipped'" class="err"><pre class="code">{{ s.error }}</pre></div>
           <div v-else-if="s.status === 'skipped'" class="muted" style="font-size: 12px">{{ s.error }}</div>
           <ApiExchange v-if="s.type === 'api' && s.output" :result="s.output as any" />
           <div v-else-if="s.output !== undefined" class="out"><span class="muted">提取结果：</span><code class="num">{{ JSON.stringify(s.output) }}</code></div>
@@ -119,6 +124,8 @@ onBeforeUnmount(() => clearTimeout(timer))
 pre.content { background: #f7f9fc; border-radius: 6px; padding: 8px 10px; }
 .err { margin-top: 8px; background: var(--fail-soft); color: var(--fail); border-radius: 6px; padding: 8px 10px; max-height: 220px; overflow: auto; }
 .out { margin-top: 6px; font-size: 12.5px; }
+.heal { margin-top: 8px; background: #e9f2ff; color: #1b4f91; border-radius: 6px; padding: 8px 10px; max-height: 220px; overflow: auto; }
+.step.healed { border-left-color: #1b5fb4; }
 .shot { width: 160px; height: 100px; object-fit: cover; object-position: top; border: 1px solid var(--border); border-radius: 6px; cursor: zoom-in; flex: none; }
 .shot.big { display: block; width: 100%; max-width: 640px; height: auto; margin-top: 10px; }
 .spin { width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; margin-right: 5px; animation: spin .8s linear infinite; }

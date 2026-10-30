@@ -32,6 +32,9 @@ function move(i: number, d: number) {
   const arr = steps.value
   ;[arr[i], arr[j]] = [arr[j], arr[i]]
 }
+function toggleFallback(s: Step) {
+  s.fallback = s.fallback ? null : { type: 'ai_assert', content: '' }
+}
 function remove(i: number) {
   steps.value.splice(i, 1)
 }
@@ -54,6 +57,16 @@ function remove(i: number) {
           :placeholder="placeholders[s.type]"
           data-test="step-content"
         ></textarea>
+        <div v-if="s.type === 'code'" class="fallback">
+          <label class="toggle"><input type="checkbox" :checked="!!s.fallback" @change="toggleFallback(s)" data-test="fallback-toggle" /> 选择器失效时 AI 兜底</label>
+          <template v-if="s.fallback">
+            <select class="select" v-model="s.fallback.type" style="width: 110px">
+              <option value="ai_action">AI 操作</option>
+              <option value="ai_assert">AI 断言</option>
+            </select>
+            <input class="input" v-model="s.fallback.content" data-test="fallback-content" placeholder="用自然语言描述这一步，例如：页面标题显示“欢迎你，demo”" />
+          </template>
+        </div>
       </div>
       <div class="ops">
         <button type="button" class="btn sm" @click="move(i, -1)" :disabled="i === 0" title="上移">↑</button>
@@ -80,4 +93,7 @@ function remove(i: number) {
 .idx { width: 24px; height: 24px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; font-size: 12px; flex: none; margin-top: 4px; }
 .body { flex: 1; min-width: 0; }
 .ops { display: flex; flex-direction: column; gap: 4px; }
+.fallback { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 12.5px; }
+.fallback .toggle { display: flex; gap: 4px; align-items: center; white-space: nowrap; color: var(--muted); cursor: pointer; }
+.fallback .input, .fallback .select { height: 28px; padding: 2px 8px; font-size: 12.5px; }
 </style>

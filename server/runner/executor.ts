@@ -175,7 +175,22 @@ export class Executor {
             if (step.type === 'ai_query') vars[`step${i + 1}`] = output
             else output = undefined
           } else {
-            await runCodeStep(step.content, await ensurePage(), vars, stepTimeoutMs * 2)
+            const p = await ensurePage()
+            try {
+              await runCodeStep(step.content, p, vars, stepTimeoutMs * 2)
+            } catch (e) {
+              // 自愈：代码步骤失败（多为选择器失效），若配置了 AI 兜底且有模型，改用视觉模型按描述执行
+              if (e instanceof NavigationError || !step.fallback) throw e
+              if (!this.opts.modelConfigured()) throw new Error(`${formatError(e)}\n（已设置 AI 兜底，但未配置模型，无法自愈）`)
+              agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId)
+              try {
+                await runAiStep(agent, step.fallback.type, step.fallback.content)
+              } catch (aiErr) {
+                throw new Error(`${formatError(e)}\n\nAI 兜底也失败：${formatError(aiErr)}`)
+              }
+              status = 'healed'
+              error = `原代码失败，已由 AI ${step.fallback.type === 'ai_assert' ? '断言' : '操作'}兜底通过，建议检查选择器是否已失效：\n${formatError(e)}`
+            }
           }
         } catch (e) {
           if (e instanceof NavigationError) {

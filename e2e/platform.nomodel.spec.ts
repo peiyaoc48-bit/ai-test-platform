@@ -188,3 +188,22 @@ test('鲁棒性对比：同一用例在三种界面变更下运行，矩阵展�
   await expect(page.getByTestId('batch-status')).toHaveText('失败', { timeout: 120_000 })
   await expect(page.getByTestId('matrix-rate')).toHaveText(['100%', '0%', '100%'])
 })
+
+test('AI 兜底：代码步骤可设置兜底描述；未配置模型时报告说明无法自愈', async ({ page }) => {
+  await page.goto('/cases/new')
+  await page.getByTestId('case-name-input').fill('E2E 自愈')
+  await page.getByTestId('step-remove').click()
+  await page.getByTestId('add-code-step').click()
+  await page.getByTestId('step-content').fill("await page.locator('[data-test=gone]').click({ timeout: 500 })")
+  await page.getByTestId('fallback-toggle').check()
+  await page.getByTestId('fallback-content').fill('点击登录按钮')
+  await page.getByTestId('save-case').click()
+
+  await row(page, 'E2E 自愈').getByTestId('edit').click()
+  await expect(page.getByTestId('fallback-content')).toHaveValue('点击登录按钮')
+  await page.goto('/cases')
+  await row(page, 'E2E 自愈').getByTestId('run').click()
+  await expect(page.getByTestId('run-status')).toHaveText('失败', { timeout: 30_000 })
+  await expect(page.getByText('未配置模型，无法自愈')).toBeVisible()
+  await expect(page.getByText('AI 兜底（断言）：点击登录按钮')).toBeVisible()
+})

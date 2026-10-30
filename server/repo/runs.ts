@@ -5,6 +5,7 @@ import type { DB } from '../db.js'
 const SUMMARY_SQL = `
 SELECT r.*,
   COALESCE(SUM(s.status = 'passed'), 0)  AS passed,
+  COALESCE(SUM(s.status = 'healed'), 0)  AS healed,
   COALESCE(SUM(s.status = 'failed'), 0)  AS failed,
   COALESCE(SUM(s.status = 'skipped'), 0) AS skipped,
   COUNT(s.idx)                           AS total,
@@ -24,6 +25,7 @@ const toSummary = (r: any): RunSummary => ({
   envName: r.env_snapshot ? JSON.parse(r.env_snapshot).name : null,
   mutation: r.mutation ?? 'none',
   passed: r.passed,
+  healed: r.healed ?? 0,
   failed: r.failed,
   skipped: r.skipped,
   total: r.total,
@@ -47,13 +49,13 @@ export function createRun(db: DB, tc: TestCase, resolvedUrl: string, opts: RunOp
   const insertRun = db.prepare(
     `INSERT INTO runs (case_id, case_name, url, status, env_snapshot, mutation, continue_on_failure) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
   )
-  const insertStep = db.prepare(`INSERT INTO run_steps (run_id, idx, type, content, status) VALUES (?, ?, ?, ?, 'pending')`)
+  const insertStep = db.prepare(`INSERT INTO run_steps (run_id, idx, type, content, fallback, status) VALUES (?, ?, ?, ?, ?, 'pending')`)
   return db.transaction(() => {
     const runId = Number(
       insertRun.run(tc.id, tc.name, resolvedUrl, opts.env ? JSON.stringify(opts.env) : null, opts.mutation ?? 'none', opts.continueOnFailure ? 1 : 0)
         .lastInsertRowid,
     )
-    tc.steps.forEach((s, i) => insertStep.run(runId, i, s.type, s.content))
+    tc.steps.forEach((s, i) => insertStep.run(runId, i, s.type, s.content, s.fallback ? JSON.stringify(s.fallback) : null))
     return runId
   })()
 }
@@ -100,6 +102,7 @@ export function getRun(db: DB, runId: number): RunDetail | null {
       index: s.idx,
       type: s.type,
       content: s.content,
+      fallback: s.fallback ? JSON.parse(s.fallback) : null,
       status: s.status,
       durationMs: s.duration_ms,
       error: s.error,

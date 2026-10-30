@@ -24,6 +24,14 @@ export function validateCase(body: unknown): CaseInput {
     if (!STEP_TYPES.includes(step?.type as StepType)) throw new ValidationError(`第 ${i + 1} 步的类型不合法`)
     const content = typeof step.content === 'string' ? step.content.trim() : ''
     if (!content) throw new ValidationError(`第 ${i + 1} 步的内容不能为空`)
+    let fallback: Step['fallback'] = null
+    if (step.fallback !== undefined && step.fallback !== null) {
+      const f = step.fallback as Record<string, unknown>
+      if (step.type !== 'code') throw new ValidationError(`第 ${i + 1} 步：只有代码步骤可以设置 AI 兜底`)
+      if (f.type !== 'ai_action' && f.type !== 'ai_assert') throw new ValidationError(`第 ${i + 1} 步：AI 兜底类型只能是操作或断言`)
+      const text = typeof f.content === 'string' ? f.content.trim() : ''
+      if (text) fallback = { type: f.type, content: text }
+    }
     if (step.type === 'api') {
       try {
         parseApiSpec(content)
@@ -31,7 +39,7 @@ export function validateCase(body: unknown): CaseInput {
         throw new ValidationError(`第 ${i + 1} 步接口定义有误：${e.message}`)
       }
     }
-    return { type: step.type as StepType, content }
+    return fallback ? { type: step.type as StepType, content, fallback } : { type: step.type as StepType, content }
   })
 
   // 纯接口用例不需要打开页面，URL 可以留空

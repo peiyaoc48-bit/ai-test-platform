@@ -356,6 +356,63 @@ describe('变更注入与鲁棒性对比', () => {
   })
 })
 
+describe('AI 兜底（自愈）', () => {
+  const broken = (fallbackText: string) => ({
+    name: '自愈',
+    description: '',
+    url: '{{DEMO}}/index.html',
+    steps: [
+      { type: 'code' as const, content: "await page.locator('[data-test=not-exist]').click({ timeout: 500 })", fallback: { type: 'ai_action' as const, content: fallbackText } },
+      { type: 'code' as const, content: 'await page.title()' },
+    ],
+  })
+
+  it('选择器失效时由 AI 兜底通过：步骤标记为已自愈，运行判为通过，并统计模型调用', async () => {
+    modelOn = true
+    const run = await runAndWait((await create(broken('点击登录按钮'))).id)
+    expect(run.status).toBe('passed')
+    expect(run.steps.map((s) => s.status)).toEqual(['healed', 'passed'])
+    expect(run).toMatchObject({ healed: 1, passed: 1, aiCalls: 1, tokens: 100 })
+    expect(run.steps[0].error).toContain('建议检查选择器')
+    expect(run.steps[0].fallback).toEqual({ type: 'ai_action', content: '点击登录按钮' })
+    expect(agentCalls).toEqual(['act:点击登录按钮'])
+  })
+
+  it('AI 兜底也失败时，报告同时给出两处错误', async () => {
+    modelOn = true
+    const run = await runAndWait((await create(broken('这一步会失败'))).id)
+    expect(run.status).toBe('failed')
+    expect(run.steps[0].error).toMatch(/not-exist[\s\S]*AI 兜底也失败/)
+  })
+
+  it('未配置模型时不自愈，提示原因', async () => {
+    const run = await runAndWait((await create(broken('点击登录按钮'))).id)
+    expect(run.steps[0].status).toBe('failed')
+    expect(run.steps[0].error).toContain('未配置模型，无法自愈')
+  })
+
+  it('代码通过时不调用模型；鲁棒性对比中“去掉测试标记”的步骤被自愈', async () => {
+    modelOn = true
+    const c = await create({
+      name: '兜底+鲁棒性',
+      description: '',
+      url: '{{DEMO}}/index.html',
+      steps: [{ type: 'code', content: "await page.locator('[data-test=username]').fill('demo', { timeout: 500 })", fallback: { type: 'ai_action', content: '在用户名输入框输入 demo' } }],
+    })
+    const started = (await api('POST', `/api/cases/${c.id}/robustness`, {})).body
+    await executor.idle()
+    const runs = await Promise.all(started.runIds.map(async (id: number) => (await api<RunDetail>('GET', `/api/runs/${id}`)).body))
+    expect(runs.map((r: RunDetail) => `${r.mutation}:${r.steps[0].status}`)).toEqual(['none:passed', 'attr:healed', 'style:passed'])
+    expect(agentCalls).toHaveLength(1)
+  })
+
+  it('只有代码步骤可以设置兜底', async () => {
+    const r = await api('POST', '/api/cases', { name: 'x', url: '{{DEMO}}/index.html', steps: [{ type: 'ai_action', content: 'a', fallback: { type: 'ai_assert', content: 'b' } }] })
+    expect(r.status).toBe(400)
+    expect(r.body.error).toContain('只有代码步骤')
+  })
+})
+
 describe('用例集与批量运行', () => {
   it('运行用例集：按顺序排队执行，批次汇总状态并可导出 JUnit', async () => {
     const pass = await create(SAMPLE_CASES[0])

@@ -13,6 +13,7 @@ export const STEP_STATUS_LABEL: Record<StepStatus, string> = {
   pending: '等待',
   running: '执行中',
   passed: '通过',
+  healed: '已自愈',
   failed: '失败',
   skipped: '跳过',
   not_run: '未执行',

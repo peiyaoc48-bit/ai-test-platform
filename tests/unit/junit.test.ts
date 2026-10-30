@@ -6,7 +6,7 @@ import type { BatchDetail, RunDetail, RunStatus } from '../../shared/types'
 
 const run = (id: number, status: RunStatus, extra: Partial<RunDetail> = {}): RunDetail => ({
   id, caseId: id, caseName: `用例${id}`, status, startedAt: null, finishedAt: null, durationMs: 1500,
-  passed: 0, failed: 0, skipped: 0, total: 1, aiCalls: 0, tokens: 0, url: '',
+  passed: 0, healed: 0, failed: 0, skipped: 0, total: 1, aiCalls: 0, tokens: 0, url: '',
   steps: [{ index: 0, type: 'code', content: 'await page.click("a")\n第二行', status: status === 'failed' ? 'failed' : 'passed', durationMs: 10, aiCalls: 0, tokens: 0, error: status === 'failed' ? 'expect(locator).toHaveText <失败> & "引号"' : null }],
   ...extra,
 })

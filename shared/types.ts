@@ -7,6 +7,13 @@ export interface Step {
   type: StepType
   /** 自然语言描述、Playwright 代码（可用变量 page、expect、vars）或接口定义（YAML） */
   content: string
+  /** 仅代码步骤：选择器失效导致失败时，改用视觉模型按这段描述执行（自愈） */
+  fallback?: StepFallback | null
+}
+
+export interface StepFallback {
+  type: 'ai_action' | 'ai_assert'
+  content: string
 }
 
 export interface TestCase {
@@ -25,12 +32,14 @@ export type CaseInput = Pick<TestCase, 'name' | 'description' | 'url' | 'steps'>
 
 /** skipped：所有步骤都被跳过（如全是自然语言步骤但未配置模型） */
 export type RunStatus = 'queued' | 'running' | 'passed' | 'failed' | 'error' | 'skipped'
-export type StepStatus = 'pending' | 'running' | 'passed' | 'failed' | 'skipped' | 'not_run'
+/** healed：代码步骤失败后由 AI 兜底通过 */
+export type StepStatus = 'pending' | 'running' | 'passed' | 'healed' | 'failed' | 'skipped' | 'not_run'
 
 export interface StepResult {
   index: number
   type: StepType
   content: string
+  fallback?: StepFallback | null
   status: StepStatus
   durationMs: number
   error?: string | null
@@ -51,6 +60,8 @@ export interface RunSummary {
   finishedAt: string | null
   durationMs: number
   passed: number
+  /** 由 AI 兜底通过的步骤数（不计入 passed） */
+  healed: number
   failed: number
   skipped: number
   total: number

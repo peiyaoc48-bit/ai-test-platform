@@ -11,8 +11,8 @@ const base = computed(() => cols.value[0])
 
 /** 每列：已执行步骤中通过的比例（跳过的不计） */
 const rate = (r: RunDetail) => {
-  const done = r.steps.filter((s) => s.status === 'passed' || s.status === 'failed')
-  return done.length ? `${Math.round((done.filter((s) => s.status === 'passed').length / done.length) * 100)}%` : '—'
+  const done = r.steps.filter((s) => s.status === 'passed' || s.status === 'healed' || s.status === 'failed')
+  return done.length ? `${Math.round((done.filter((s) => s.status !== 'failed').length / done.length) * 100)}%` : '—'
 }
 /** 按步骤类型汇总：每种写法在各变更下的存活率 */
 const byType = computed(() => {
@@ -20,8 +20,8 @@ const byType = computed(() => {
   return types.map((t) => ({
     type: t,
     cells: cols.value.map((r) => {
-      const steps = r.steps.filter((s) => s.type === t && (s.status === 'passed' || s.status === 'failed'))
-      return steps.length ? `${steps.filter((s) => s.status === 'passed').length} / ${steps.length}` : '—'
+      const steps = r.steps.filter((s) => s.type === t && (s.status === 'passed' || s.status === 'healed' || s.status === 'failed'))
+      return steps.length ? `${steps.filter((s) => s.status !== 'failed').length} / ${steps.length}` : '—'
     }),
   }))
 })

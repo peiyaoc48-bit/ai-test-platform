@@ -29,8 +29,15 @@ async function save() {
   error.value = ''
   saving.value = true
   try {
-    if (props.id) await api.updateCase(Number(props.id), form)
-    else await api.createCase(form)
+    // 只有代码步骤保留 AI 兜底；描述为空视为不设置
+    const body = {
+      ...form,
+      steps: form.steps.map(({ type, content, fallback }) =>
+        type === 'code' && fallback?.content.trim() ? { type, content, fallback } : { type, content },
+      ),
+    }
+    if (props.id) await api.updateCase(Number(props.id), body)
+    else await api.createCase(body)
     router.push('/cases')
   } catch (e: any) {
     error.value = e.message
