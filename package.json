@@ -10,7 +10,9 @@
     "start": "NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc --noEmit && vue-tsc --noEmit -p web/tsconfig.json",
     "test": "vitest run",
-    "test:e2e": "vite build && playwright test"
+    "test:e2e": "vite build && playwright test",
+    "test:api": "cd api-tests && .venv/bin/pytest",
+    "test:api:setup": "python3 -m venv api-tests/.venv && api-tests/.venv/bin/pip install -r api-tests/requirements.txt"
   },
   "engines": {
     "node": ">=20"

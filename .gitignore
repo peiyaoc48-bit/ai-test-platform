@@ -8,3 +8,9 @@ playwright-report/
 .env.local
 *.log
 .DS_Store
+# Python 接口测试
+api-tests/.venv/
+__pycache__/
+.pytest_cache/
+allure-results/
+allure-report/
