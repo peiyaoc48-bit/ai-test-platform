@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from '../ui/StatusBadge.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
@@ -57,17 +58,17 @@ const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10_000 ? 0 
           <option value="">全部用例</option>
           <option v-for="c in cases" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
-        <div class="seg">
+        <div class="chips">
           <button v-for="d in [7, 14, 30]" :key="d" :class="{ on: days === d }" @click="days = d">近 {{ d }} 天</button>
         </div>
       </div>
     </div>
 
-    <div class="tiles" v-if="stats">
-      <div class="tile"><div class="label">运行次数</div><div class="value num" data-test="stat-runs">{{ stats.totalRuns }}</div><div class="foot num">通过 {{ stats.passedRuns }} · 失败 {{ stats.failedRuns }}</div></div>
-      <div class="tile"><div class="label">运行通过率</div><div class="value num" data-test="stat-rate">{{ pct(stats.passRate) }}</div><div class="foot">近 {{ days }} 天</div></div>
-      <div class="tile"><div class="label">平均耗时</div><div class="value num">{{ formatDuration(stats.avgDurationMs) }}</div><div class="foot">每次运行</div></div>
-      <div class="tile"><div class="label">模型调用</div><div class="value num">{{ stats.aiCalls }}</div><div class="foot num">{{ stats.tokens.toLocaleString() }} tokens</div></div>
+    <div class="kpis" v-if="stats">
+      <div class="kpi"><div class="label">运行次数</div><div class="value num" data-test="stat-runs">{{ stats.totalRuns }}</div><div class="foot num">通过 {{ stats.passedRuns }} · 失败 {{ stats.failedRuns }}</div></div>
+      <div class="kpi"><div class="label">运行通过率</div><div class="value num" data-test="stat-rate">{{ pct(stats.passRate) }}</div><div class="foot">近 {{ days }} 天</div></div>
+      <div class="kpi"><div class="label">平均耗时</div><div class="value num">{{ formatDuration(stats.avgDurationMs) }}</div><div class="foot">每次运行</div></div>
+      <div class="kpi"><div class="label">模型调用</div><div class="value num">{{ stats.aiCalls }}</div><div class="foot num">{{ stats.tokens.toLocaleString() }} tokens</div></div>
     </div>
 
     <div class="charts">
@@ -84,6 +85,7 @@ const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10_000 ? 0 
     </div>
 
     <div class="card flush">
+      <div class="card-head"><h2>运行记录</h2><span class="muted num" style="font-size: 12px">最近 {{ runs.length }} 次</span></div>
       <table class="table" data-test="run-table">
         <thead>
           <tr><th style="width: 70px">运行</th><th>用例</th><th style="width: 90px">结果</th><th style="width: 160px">步骤（通过/失败/跳过）</th><th style="width: 100px">耗时</th><th style="width: 130px">模型调用</th><th style="width: 150px">开始时间</th></tr>
@@ -92,7 +94,7 @@ const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10_000 ? 0 
           <tr v-for="r in runs" :key="r.id" data-test="run-row">
             <td><RouterLink class="num" :to="`/runs/${r.id}`">#{{ r.id }}</RouterLink></td>
             <td>{{ r.caseName }}</td>
-            <td><span class="tag" :class="r.status">{{ RUN_STATUS_LABEL[r.status] }}</span></td>
+            <td><StatusBadge :status="r.status" size="sm" /></td>
             <td class="num">{{ r.passed }} / <span :style="{ color: r.failed ? 'var(--fail)' : '' }">{{ r.failed }}</span> / {{ r.skipped }}</td>
             <td class="num">{{ formatDuration(r.durationMs) }}</td>
             <td class="num">{{ r.aiCalls ? `${r.aiCalls} 次 · ${r.tokens.toLocaleString()}` : '—' }}</td>
@@ -108,14 +110,6 @@ const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10_000 ? 0 
 <style scoped>
 .filters { display: flex; gap: 8px; align-items: center; }
 .filters .select { width: 220px; height: 32px; padding: 0 8px; }
-.seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #fff; }
-.seg button { border: 0; background: none; padding: 0 12px; height: 30px; font-size: 13px; cursor: pointer; color: var(--muted); }
-.seg button.on { background: var(--brand-soft); color: var(--brand); }
-.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-.tile { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.tile .label { color: var(--muted); font-size: 12px; }
-.tile .value { font-size: 26px; font-weight: 600; margin: 2px 0; }
-.tile .foot { color: var(--muted); font-size: 12px; }
 .charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 900px) { .charts, .tiles { grid-template-columns: 1fr 1fr; } .charts { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
 </style>

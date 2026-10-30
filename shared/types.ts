@@ -167,6 +167,30 @@ export interface BatchDetail extends BatchSummary {
   runs: RunSummary[]
 }
 
+export interface FlakyCase {
+  caseId: number
+  caseName: string
+  /** 最近若干次运行中“通过 ↔ 失败”的切换次数 */
+  transitions: number
+  passRate: number
+  /** 从旧到新的运行结果 */
+  recent: RunStatus[]
+}
+
+export interface DashboardData {
+  counts: { cases: number; suites: number; environments: number; aiSteps: number; apiSteps: number; codeSteps: number }
+  /** 近 7 天 */
+  week: Stats
+  /** 上一个 7 天的运行通过率，用于环比 */
+  prevPassRate: number | null
+  daily: DailyStat[]
+  /** 最近一次运行失败的用例 */
+  failing: RunSummary[]
+  flaky: FlakyCase[]
+  recent: RunSummary[]
+  flakyRule: { window: number; minTransitions: number }
+}
+
 export interface PlatformConfig {
   modelConfigured: boolean
   modelName: string | null

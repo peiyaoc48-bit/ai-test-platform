@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { AlertCircle, Download, ShieldCheck } from 'lucide-vue-next'
+import StatusBadge from '../ui/StatusBadge.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '../api'
 import type { BatchDetail, RunDetail } from '../../../shared/types'
@@ -33,11 +35,11 @@ onBeforeUnmount(() => clearTimeout(timer))
       <div>
         <h1>
           批次 <span class="num">#{{ batch.id }}</span> · {{ batch.name }}
-          <span class="tag" :class="batch.status" data-test="batch-status" style="margin-left: 8px; vertical-align: 3px">{{ RUN_STATUS_LABEL[batch.status] }}</span>
+          <span data-test="batch-status"><StatusBadge :status="batch.status" /></span>
         </h1>
         <div class="sub num">{{ batch.trigger === 'ci' ? 'CI 触发' : '手动触发' }} · {{ formatTime(batch.createdAt) }}</div>
       </div>
-      <a class="btn" :href="`/api/batches/${batch.id}/junit`" data-test="junit">下载 JUnit 报告</a>
+      <a class="btn" :href="`/api/batches/${batch.id}/junit`" data-test="junit"><Download :size="14" />下载 JUnit 报告</a>
     </div>
 
     <div class="progress"><div class="bar" :style="{ width: `${batch.total ? (done / batch.total) * 100 : 0}%` }"></div></div>
@@ -47,7 +49,7 @@ onBeforeUnmount(() => clearTimeout(timer))
     </div>
 
     <template v-if="batch.kind === 'robustness'">
-      <div class="alert info">
+      <div class="alert info"><ShieldCheck :size="16" />
         同一用例分别在三种情况下运行（失败后继续执行）：无变更、去掉 data-test 等测试标记、更换视觉样式。依赖测试标记的选择器在第二列会失效，视觉断言不受影响；需要配置模型才能看到视觉步骤的结果。
       </div>
       <RobustnessMatrix :runs="details" />
@@ -59,7 +61,7 @@ onBeforeUnmount(() => clearTimeout(timer))
           <tr v-for="r in batch.runs" :key="r.id" data-test="batch-run">
             <td><RouterLink class="num" :to="`/runs/${r.id}`">#{{ r.id }}</RouterLink></td>
             <td>{{ r.caseName }}</td>
-            <td><span class="tag" :class="r.status">{{ RUN_STATUS_LABEL[r.status] }}</span></td>
+            <td><StatusBadge :status="r.status" size="sm" /></td>
             <td class="num">{{ r.passed }} / {{ r.failed }} / {{ r.skipped }}</td>
             <td class="num">{{ r.durationMs ? formatDuration(r.durationMs) : '—' }}</td>
           </tr>
@@ -67,7 +69,7 @@ onBeforeUnmount(() => clearTimeout(timer))
       </table>
     </div>
   </div>
-  <div class="page" v-else-if="error"><div class="alert error">{{ error }}</div></div>
+  <div class="page" v-else-if="error"><div class="alert error"><AlertCircle :size="16" />{{ error }}</div></div>
 </template>
 
 <style scoped>

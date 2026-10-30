@@ -134,10 +134,10 @@ export function failInterruptedRuns(db: DB) {
   db.prepare(`UPDATE runs SET status = 'error', error = '平台重启，运行被中断' WHERE status IN ('queued', 'running')`).run()
 }
 
-/** 运行统计：只统计已结束的运行；通过率 = 通过 / (通过 + 失败 + 异常) */
+/** 运行统计：只统计已结束的运行；通过率 = 通过 / (通过 + 失败 + 异常)；变更注入的运行是刻意制造失败，不计入 */
 export function getStats(db: DB, opts: { days?: number; caseId?: number } = {}): Stats {
   const days = opts.days ?? 14
-  const filter = `status NOT IN ('queued', 'running')
+  const filter = `status NOT IN ('queued', 'running') AND COALESCE(mutation, 'none') = 'none'
     AND started_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
     ${opts.caseId ? 'AND case_id = ?' : ''}`
   const params: unknown[] = [`-${days} days`, ...(opts.caseId ? [opts.caseId] : [])]

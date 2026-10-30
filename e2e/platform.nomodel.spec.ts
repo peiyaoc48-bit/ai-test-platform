@@ -20,9 +20,16 @@ async function createCase(page: Page, name: string, steps: { type?: string; cont
 
 const row = (page: Page, name: string) => page.getByTestId('case-row').filter({ hasText: name })
 
-test('首页展示示例用例与“未配置模型”状态', async ({ page }) => {
+test('首页概览与用例列表：示例用例、未配置模型状态、搜索筛选', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveURL(/\/cases$/)
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(page.getByTestId('kpi-cases')).toHaveText('4')
+  await page.getByTestId('nav-cases').click()
+  await expect(page.getByTestId('case-row')).toHaveCount(4)
+  await page.getByTestId('case-search').fill('接口')
+  await expect(page.getByTestId('case-row')).toHaveCount(1)
+  await page.getByTestId('case-search').fill('')
+  await page.getByTestId('filter-none').click()
   await expect(page.getByTestId('case-row')).toHaveCount(4)
   await expect(page.getByTestId('model-status')).toContainText('未配置模型')
 })
@@ -40,7 +47,7 @@ test('新建用例 → 执行 → 查看报告', async ({ page }) => {
   await expect(page.getByTestId('step-status')).toHaveText(['通过', '通过', '通过'])
   await expect(page.getByTestId('pass-rate')).toHaveText('100%')
 
-  await page.getByRole('link', { name: '测试报告' }).click()
+  await page.getByTestId('nav-reports').click()
   await expect(page.getByTestId('run-row').first()).toContainText('E2E 登录并添加待办')
   await expect(page.getByTestId('run-row').first()).toContainText('通过')
 })
@@ -75,8 +82,13 @@ test('编辑与删除用例', async ({ page }) => {
   await page.getByTestId('save-case').click()
   await expect(row(page, 'E2E 已改名')).toHaveCount(1)
 
-  page.once('dialog', (d) => d.accept())
   await row(page, 'E2E 已改名').getByTestId('delete').click()
+  await expect(page.getByTestId('confirm')).toContainText('删除用例“E2E 已改名”')
+  await page.getByTestId('confirm-cancel').click()
+  await expect(row(page, 'E2E 已改名')).toHaveCount(1)
+  await row(page, 'E2E 已改名').getByTestId('delete').click()
+  await page.getByTestId('confirm-ok').click()
+  await expect(page.getByTestId('toast').filter({ hasText: '用例已删除' })).toBeVisible()
   await expect(row(page, 'E2E 已改名')).toHaveCount(0)
 })
 

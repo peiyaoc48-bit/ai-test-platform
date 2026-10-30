@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { AlertCircle } from 'lucide-vue-next'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import { toast } from '../ui/feedback'
 import type { Environment, SuiteInput, TestCase } from '../../../shared/types'
 
 const props = defineProps<{ id?: string }>()
@@ -33,6 +35,7 @@ async function save() {
   try {
     if (props.id) await api.updateSuite(Number(props.id), form)
     else await api.createSuite(form)
+    toast(props.id ? '用例集已保存' : '用例集已创建')
     router.push('/suites')
   } catch (e: any) {
     error.value = e.message
@@ -43,7 +46,7 @@ async function save() {
 <template>
   <div class="page" v-if="loaded">
     <div class="page-head"><h1>{{ id ? '编辑用例集' : '新建用例集' }}</h1></div>
-    <div v-if="error" class="alert error" data-test="suite-error">{{ error }}</div>
+    <div v-if="error" class="alert error" data-test="suite-error"><AlertCircle :size="16" />{{ error }}</div>
     <form @submit.prevent="save">
       <div class="card">
         <div class="field"><label>名称</label><input class="input" v-model="form.name" data-test="suite-name" placeholder="例如：冒烟、每日回归" /></div>

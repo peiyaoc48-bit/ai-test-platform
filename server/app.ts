@@ -10,6 +10,7 @@ import { createCase, deleteCase, getCase, listCases, updateCase } from './repo/c
 import { createRun, getRun, getStats, listRuns } from './repo/runs.js'
 import { createBatch, createSuite, deleteSuite, getBatch, getSuite, listBatches, listSuites, updateSuite } from './repo/suites.js'
 import { toJUnit } from './report/junit.js'
+import { getDashboard } from './repo/dashboard.js'
 import { exportPlaywright } from './report/export.js'
 import type { Executor } from './runner/executor.js'
 import { generateDrafts } from './ai/generate.js'
@@ -71,6 +72,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       demoUrl: demoBaseUrl(opts.port),
     }
   })
+
+  app.get('/api/dashboard', async () => getDashboard(db))
 
   // —— 用例管理 ——
   app.get('/api/cases', async () => listCases(db))

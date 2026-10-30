@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { AlertCircle } from 'lucide-vue-next'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import { toast } from '../ui/feedback'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
@@ -55,6 +57,7 @@ async function save() {
     }
     if (props.id) await api.updateEnv(Number(props.id), body)
     else await api.createEnv(body)
+    toast(props.id ? '环境已保存' : '环境已创建')
     router.push('/environments')
   } catch (e: any) {
     error.value = e.message
@@ -65,7 +68,7 @@ async function save() {
 <template>
   <div class="page" v-if="loaded">
     <div class="page-head"><h1>{{ id ? '编辑环境' : '新建环境' }}</h1></div>
-    <div v-if="error" class="alert error" data-test="env-error">{{ error }}</div>
+    <div v-if="error" class="alert error" data-test="env-error"><AlertCircle :size="16" />{{ error }}</div>
     <form @submit.prevent="save">
       <div class="card">
         <div class="field"><label>名称</label><input class="input" v-model="form.name" data-test="env-name" placeholder="例如：测试环境、在线监考（本地）" /></div>

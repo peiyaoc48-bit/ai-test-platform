@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { AlertCircle, Loader2, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, type GenerateResult } from '../api'
+import { toast } from '../ui/feedback'
 import StepsEditor from '../components/StepsEditor.vue'
 import type { CaseInput, PlatformConfig } from '../../../shared/types'
 
@@ -50,6 +52,7 @@ async function save() {
       const { keep, ...input } = d
       await api.createCase(input)
     }
+    toast(`已保存 ${keepCount.value} 条用例`)
     router.push('/cases')
   } catch (e: any) {
     error.value = `保存失败：${e.message}`
@@ -69,24 +72,42 @@ async function save() {
     </div>
 
     <div v-if="config && !config.modelConfigured" class="alert warn" data-test="no-model">
-      <strong>未配置大模型，暂不能生成。</strong>
-      复制 <code>.env.example</code> 为 <code>.env</code>，填写 <code>MIDSCENE_MODEL_BASE_URL</code>、<code>MIDSCENE_MODEL_API_KEY</code>、<code>MIDSCENE_MODEL_NAME</code> 后重启平台（<code>npm run dev</code>）。
+      <TriangleAlert :size="16" />
+      <div>
+        <strong>未配置大模型，暂不能生成。</strong>
+        复制 <code>.env.example</code> 为 <code>.env</code>，填写 <code>MIDSCENE_MODEL_BASE_URL</code>、<code>MIDSCENE_MODEL_API_KEY</code>、<code>MIDSCENE_MODEL_NAME</code> 后重启平台（<code>npm run dev</code>）。
+      </div>
     </div>
-    <div v-if="error" class="alert error" data-test="gen-error">{{ error }}</div>
+    <div v-if="error" class="alert error" data-test="gen-error"><AlertCircle :size="16" />{{ error }}</div>
 
-    <div class="card">
-      <div class="field">
-        <label>需求描述 <button class="btn link" type="button" @click="requirement = EXAMPLE" data-test="fill-example">填入示例需求</button></label>
-        <textarea class="textarea" v-model="requirement" rows="8" data-test="requirement" placeholder="粘贴 PRD 片段、用户故事或验收标准……"></textarea>
+    <div class="gen-layout">
+      <div class="card">
+        <div class="field">
+          <label>需求描述 <button class="btn link" type="button" @click="requirement = EXAMPLE" data-test="fill-example">填入示例需求</button></label>
+          <textarea class="textarea" v-model="requirement" rows="10" data-test="requirement" placeholder="粘贴 PRD 片段、用户故事或验收标准……"></textarea>
+          <div class="hint num">{{ requirement.trim().length }} / 8000 字</div>
+        </div>
+        <div class="field">
+          <label>目标 URL</label>
+          <input class="input num" v-model="url" />
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <button class="btn primary" @click="generate" :disabled="loading || !config?.modelConfigured || requirement.trim().length < 10" data-test="generate">
+            <Loader2 v-if="loading" :size="14" class="spin" /><Sparkles v-else :size="14" />
+            {{ loading ? `生成中…（${elapsed}s）` : '生成用例草稿' }}
+          </button>
+          <span class="muted" style="font-size: 12px" v-if="config?.genModelName">模型：{{ config.genModelName }}</span>
+        </div>
       </div>
-      <div class="field">
-        <label>目标 URL</label>
-        <input class="input num" v-model="url" />
+      <div class="card how">
+        <h2>工作方式</h2>
+        <ol>
+          <li><b>粘贴需求</b>：PRD 片段、用户故事或验收标准都可以，写清楚期望出现的文案效果更好。</li>
+          <li><b>生成草稿</b>：大模型按“主流程 + 异常 / 边界场景”生成 2～5 条用例，步骤为自然语言，至少包含一个具体的断言。</li>
+          <li><b>人工审核</b>：逐条修改或取消勾选；需求里没有的账号和文案，模型会在描述里标注“需确认”。</li>
+          <li><b>保存入库</b>：只保存勾选的草稿，保存时走与手工新建相同的校验。</li>
+        </ol>
       </div>
-      <button class="btn primary" @click="generate" :disabled="loading || !config?.modelConfigured || requirement.trim().length < 10" data-test="generate">
-        {{ loading ? `生成中…（${elapsed}s）` : '生成用例草稿' }}
-      </button>
-      <span class="muted" style="margin-left: 10px; font-size: 12px" v-if="config?.genModelName">模型：{{ config.genModelName }}</span>
     </div>
 
     <template v-if="drafts.length">
@@ -114,4 +135,10 @@ async function save() {
 .draft.off { opacity: .5; border-left-color: var(--border); }
 .draft :deep(.card) { margin-bottom: 8px; }
 .keep { float: right; font-size: 13px; display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.gen-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.how ol { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); line-height: 1.75; }
+.how li { margin-bottom: 6px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 1000px) { .gen-layout { grid-template-columns: 1fr; } }
 </style>

@@ -1,4 +1,4 @@
-import type { BatchDetail, BatchSummary, Environment, EnvironmentInput, Suite, SuiteInput } from '../../shared/types'
+import type { BatchDetail, BatchSummary, DashboardData, Environment, EnvironmentInput, Suite, SuiteInput } from '../../shared/types'
 import { currentEnvId } from './env-store'
 import type { CaseInput, Stats, PlatformConfig, RunDetail, RunSummary, TestCase } from '../../shared/types'
 
@@ -21,6 +21,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 }
 
 export const api = {
+  dashboard: () => request<DashboardData>('GET', '/api/dashboard'),
   config: () => request<PlatformConfig>('GET', '/api/config'),
   listCases: () => request<TestCase[]>('GET', '/api/cases'),
   getCase: (id: number) => request<TestCase>('GET', `/api/cases/${id}`),
