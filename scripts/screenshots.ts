@@ -35,9 +35,22 @@ if (apiRun) {
   await shot('run-api')
 }
 const batches = await (await page.request.get(`${base}/api/batches`)).json()
-if (batches[0]) {
-  await page.goto(`${base}/batches/${batches[0].id}`)
+const normal = batches.find((b: any) => b.kind === 'normal')
+if (normal) {
+  await page.goto(`${base}/batches/${normal.id}`)
   await shot('batch')
+}
+const robust = batches.find((b: any) => b.kind === 'robustness' && b.status !== 'running')
+if (robust) {
+  await page.goto(`${base}/batches/${robust.id}`)
+  await shot('robustness')
+}
+await page.goto(`${base}/environments`)
+await shot('environments')
+const envs = await (await page.request.get(`${base}/api/environments`)).json()
+if (envs[0]) {
+  await page.goto(`${base}/environments/${envs[0].id}/edit`)
+  await shot('environment-edit', true)
 }
 await page.goto(`${base}/suites`)
 await shot('suites')
