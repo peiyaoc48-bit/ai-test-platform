@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import ApiExchange from '../components/ApiExchange.vue'
 import { STEP_TYPE_LABEL, type RunDetail } from '../../../shared/types'
 import { RUN_STATUS_LABEL, STEP_STATUS_LABEL, formatDuration, formatTime } from '../format'
 
@@ -47,7 +48,7 @@ onBeforeUnmount(() => clearTimeout(timer))
           运行 <span class="num">#{{ run.id }}</span> · {{ run.caseName }}
           <span class="tag" :class="run.status" data-test="run-status" style="margin-left: 8px; vertical-align: 3px">{{ RUN_STATUS_LABEL[run.status] }}</span>
         </h1>
-        <div class="sub num">{{ run.url }} · 开始于 {{ formatTime(run.startedAt) }}</div>
+        <div class="sub num">{{ run.url || "纯接口用例（未打开浏览器）" }} · 开始于 {{ formatTime(run.startedAt) }}</div>
       </div>
       <div style="display: flex; gap: 8px">
         <a v-if="run.midsceneReport" class="btn" :href="`/midscene/${run.midsceneReport}`" target="_blank">Midscene 回放报告</a>
@@ -73,18 +74,19 @@ onBeforeUnmount(() => clearTimeout(timer))
         <div class="idx num">{{ s.index + 1 }}</div>
         <div class="main">
           <div class="line">
-            <span class="tag" :class="s.type === 'code' ? 'code' : 'ai'">{{ STEP_TYPE_LABEL[s.type] }}</span>
+            <span class="tag" :class="s.type === 'code' ? 'code' : s.type === 'api' ? 'api' : 'ai'">{{ STEP_TYPE_LABEL[s.type] }}</span>
             <span class="tag" :class="s.status" data-test="step-status">
               <span v-if="s.status === 'running'" class="spin"></span>{{ STEP_STATUS_LABEL[s.status] }}
             </span>
             <span class="meta num" v-if="s.durationMs">{{ formatDuration(s.durationMs) }}</span>
             <span class="meta num" v-if="s.aiCalls">模型 {{ s.aiCalls }} 次 · {{ s.tokens.toLocaleString() }} tokens</span>
           </div>
-          <pre v-if="s.type === 'code'" class="code content">{{ s.content }}</pre>
+          <pre v-if="s.type === 'code' || s.type === 'api'" class="code content">{{ s.content }}</pre>
           <div v-else class="content">{{ s.content }}</div>
           <div v-if="s.error && s.status !== 'skipped'" class="err"><pre class="code">{{ s.error }}</pre></div>
           <div v-else-if="s.status === 'skipped'" class="muted" style="font-size: 12px">{{ s.error }}</div>
-          <div v-if="s.output !== undefined" class="out"><span class="muted">提取结果：</span><code class="num">{{ JSON.stringify(s.output) }}</code></div>
+          <ApiExchange v-if="s.type === 'api' && s.output" :result="s.output as any" />
+          <div v-else-if="s.output !== undefined" class="out"><span class="muted">提取结果：</span><code class="num">{{ JSON.stringify(s.output) }}</code></div>
           <img v-if="s.screenshot && s.status === 'failed'" class="shot big" :src="`/artifacts/${s.screenshot}`" @click="preview = s.screenshot" data-test="fail-shot" />
         </div>
         <img v-if="s.screenshot && s.status !== 'failed'" class="shot" :src="`/artifacts/${s.screenshot}`" @click="preview = s.screenshot" />

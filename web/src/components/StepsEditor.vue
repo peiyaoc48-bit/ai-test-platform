@@ -9,10 +9,22 @@ const placeholders: Record<StepType, string> = {
   ai_assert: '例如：页面顶部显示“欢迎你，demo”',
   ai_query: '例如：string[]，列表中所有待办事项的文字',
   code: "例如：await page.click('[data-test=submit]')\nawait expect(page.locator('h1')).toContainText('欢迎')",
+  api: 'YAML：method / url / headers / json / expect / extract',
 }
 
+const API_TEMPLATE = `method: POST
+url: "{{DEMO_API}}/login"
+json: { username: demo, password: demo123 }
+expect:
+  status: 200
+  maxMs: 500
+  json:
+    token: { type: string }
+extract:
+  token: token   # 后续步骤用 {{token}} 引用`
+
 function add(type: StepType) {
-  steps.value.push({ type, content: '' })
+  steps.value.push({ type, content: type === 'api' ? API_TEMPLATE : '' })
 }
 function move(i: number, d: number) {
   const j = i + d
@@ -36,9 +48,9 @@ function remove(i: number) {
         </select>
         <textarea
           class="textarea"
-          :class="{ code: s.type === 'code' }"
+          :class="{ code: s.type === 'code' || s.type === 'api' }"
           v-model="s.content"
-          :rows="s.type === 'code' ? 4 : 2"
+          :rows="s.type === 'api' ? 9 : s.type === 'code' ? 4 : 2"
           :placeholder="placeholders[s.type]"
           data-test="step-content"
         ></textarea>
@@ -53,9 +65,11 @@ function remove(i: number) {
       <button type="button" class="btn sm" @click="add('ai_action')" data-test="add-ai-step">+ 自然语言步骤</button>
       <button type="button" class="btn sm" @click="add('ai_assert')">+ AI 断言</button>
       <button type="button" class="btn sm" @click="add('code')" data-test="add-code-step">+ 代码步骤</button>
+      <button type="button" class="btn sm" @click="add('api')" data-test="add-api-step">+ 接口步骤</button>
     </div>
     <div class="hint" style="margin-top: 10px">
-      代码步骤可使用 <code>page</code>（Playwright Page）、<code>expect</code>（@playwright/test）和 <code>vars</code>（AI 提取步骤的结果，按步骤序号存为 <code>vars.step3</code>）。
+      代码步骤可使用 <code>page</code>（Playwright Page）、<code>expect</code>（@playwright/test）和 <code>vars</code>（AI 提取步骤的结果按步骤序号存为 <code>vars.step3</code>，接口步骤 <code>extract</code> 的变量按名字存放）。
+      接口步骤用 YAML 描述，可引用 <code v-pre>{{DEMO_API}}</code> 和前面步骤提取的变量；断言支持 <code>status</code>、<code>maxMs</code>、<code>headers</code>、<code>bodyContains</code>，以及 <code>json</code> 字段的 <code>eq / exists / contains / len / gt / lt / type</code>。
     </div>
   </div>
 </template>

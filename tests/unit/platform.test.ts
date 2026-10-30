@@ -17,6 +17,7 @@ let app: FastifyInstance
 let executor: Executor
 let modelOn = false
 let artifactsDir: string
+let port = 0
 const agentCalls: string[] = []
 
 /** 假 Agent：每次调用计 1 次模型、100 token；内容含“失败”的断言会抛错 */
@@ -49,11 +50,12 @@ beforeAll(async () => {
     stepTimeoutMs: 3000,
     modelConfigured: () => modelOn,
     agentFactory: async () => fakeAgent(),
+    templateVars: () => ({ DEMO: `http://127.0.0.1:${port}/demo`, DEMO_API: `http://127.0.0.1:${port}/demo-api` }),
   })
   // 先监听拿到端口，演示站点地址依赖端口
   app = await buildApp({ db, port: 0, artifactsDir, executor })
   await app.listen({ port: 0, host: '127.0.0.1' })
-  const port = (app.server.address() as AddressInfo).port
+  port = (app.server.address() as AddressInfo).port
   await app.close()
   app = await buildApp({ db, port, artifactsDir, executor })
   await app.listen({ port, host: '127.0.0.1' })
@@ -100,7 +102,7 @@ describe('用例 CRUD 接口', () => {
   })
 
   it('非法输入返回 400 与中文提示', async () => {
-    const r = await api('POST', '/api/cases', { name: 'a', url: 'x', steps: [] })
+    const r = await api('POST', '/api/cases', { name: 'a', url: 'x', steps: [{ type: 'code', content: '1' }] })
     expect(r.status).toBe(400)
     expect(r.body.error).toContain('URL')
   })
@@ -200,6 +202,50 @@ describe('执行引擎', () => {
     expect(run.status).toBe('error')
     expect(run.error).toContain('打开目标页面失败')
     expect(run.steps[0].status).toBe('not_run')
+  })
+})
+
+describe('接口步骤', () => {
+  it('纯接口用例不启动浏览器：登录 → 提取 token → 增删改查', async () => {
+    const run = await runAndWait((await create(SAMPLE_CASES[3])).id)
+    expect(run.status).toBe('passed')
+    expect(run.steps.every((s) => s.status === 'passed' && s.screenshot === null)).toBe(true)
+    const login = run.steps[0].output as any
+    expect(login.response.status).toBe(200)
+    expect(login.extracted.token).toMatch(/^[0-9a-f]{32}$/)
+    // 报告里不明文保存 token
+    const create_ = run.steps[2].output as any
+    expect(create_.request.headers.Authorization).toMatch(/\*\*\*$/)
+  })
+
+  it('接口断言失败时报告带上响应，后续步骤不执行', async () => {
+    const c = await create({
+      name: '错误密码',
+      description: '',
+      url: '',
+      steps: [
+        { type: 'api', content: 'method: POST\nurl: "{{DEMO_API}}/login"\njson: { username: demo, password: x }\nexpect: { status: 200 }' },
+        { type: 'api', content: 'url: "{{DEMO_API}}/me"' },
+      ],
+    })
+    const run = await runAndWait(c.id)
+    expect(run.status).toBe('failed')
+    expect(run.steps[0].error).toContain('状态码期望 200，实际 401')
+    expect((run.steps[0].output as any).response.body).toEqual({ error: '用户名或密码错误' })
+    expect(run.steps[1].status).toBe('not_run')
+  })
+
+  it('接口步骤与页面步骤可混用：接口造数据，页面再验证', async () => {
+    const c = await create({
+      name: '混合',
+      description: '',
+      url: '{{DEMO}}/index.html',
+      steps: [
+        { type: 'api', content: 'method: POST\nurl: "{{DEMO_API}}/login"\njson: { username: demo, password: demo123 }\nextract: { user: username }' },
+        { type: 'code', content: `await page.fill('[data-test=username]', vars.user)\nawait page.fill('[data-test=password]', 'demo123')\nawait page.click('[data-test=submit]')\nawait expect(page.locator('[data-test=welcome]')).toContainText(vars.user)` },
+      ],
+    })
+    expect((await runAndWait(c.id)).status).toBe('passed')
   })
 })
 

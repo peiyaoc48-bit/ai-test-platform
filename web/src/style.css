@@ -67,6 +67,7 @@ table.table { width: 100%; border-collapse: collapse; }
 .tag.running, .tag.queued { background: var(--brand-soft); color: var(--run); }
 .tag.ai { background: #f0ebfd; color: #5b3cc4; }
 .tag.code { background: #eef1f6; color: #3d4a5c; }
+.tag.api { background: #e6f4f6; color: #0e6a78; }
 
 .field { margin-bottom: 16px; }
 .field > label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }

@@ -1,10 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import type { StepStatus } from '../../shared/types.js'
 import type { DB } from '../db.js'
 import { finishRun, getRun, markRunStarted, updateStep } from '../repo/runs.js'
 import { type AgentFactory, type AiAgent, midsceneAgentFactory, runAiStep, usageSnapshot } from './ai.js'
+import { ApiStepError, runApiStep } from './api-step.js'
 import { deriveRunStatus, formatError, runCodeStep } from './steps.js'
 
 export interface ExecutorOptions {
@@ -19,6 +20,8 @@ export interface ExecutorOptions {
   /** 是否配置了模型；未配置时自然语言步骤直接跳过 */
   modelConfigured: () => boolean
   agentFactory?: AgentFactory
+  /** 模板变量（如 DEMO、DEMO_API），供接口步骤的 {{变量}} 使用 */
+  templateVars?: () => Record<string, string>
 }
 
 /**
@@ -88,13 +91,27 @@ export class Executor {
     let runError: string | null = null
     let agent: AiAgent | null = null
     let midsceneReport: string | null = null
-
-    const browser = await this.getBrowser()
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' })
-    const page = await context.newPage()
-    page.setDefaultTimeout(this.opts.stepTimeoutMs)
+    // 浏览器按需启动：纯接口用例不打开页面
+    let context: BrowserContext | null = null
+    let page: Page | null = null
+    const ensurePage = async () => {
+      if (page) return page
+      const browser = await this.getBrowser()
+      context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' })
+      page = await context.newPage()
+      page.setDefaultTimeout(this.opts.stepTimeoutMs)
+      if (run.url) {
+        try {
+          await page.goto(run.url, { timeout: this.opts.navTimeoutMs ?? 30_000 })
+        } catch (e) {
+          throw new NavigationError(`打开目标页面失败：${formatError(e)}`)
+        }
+      }
+      return page
+    }
 
     const shoot = async (idx: number) => {
+      if (!page) return null
       const file = `step-${idx + 1}.jpg`
       try {
         await page.screenshot({ path: path.join(runDir, file), type: 'jpeg', quality: 70, timeout: 5000 })
@@ -105,17 +122,11 @@ export class Executor {
     }
 
     try {
-      try {
-        await page.goto(run.url, { timeout: this.opts.navTimeoutMs ?? 30_000 })
-      } catch (e) {
-        runError = `打开目标页面失败：${formatError(e)}`
-      }
-
-      const vars: Record<string, unknown> = {}
+      // 接口步骤可用 {{DEMO}} / {{DEMO_API}} 以及前面步骤提取的变量
+      const vars: Record<string, unknown> = { ...(this.opts.templateVars?.() ?? {}) }
       for (const step of run.steps) {
-        if (runError) break
         const i = step.index
-        const isAi = step.type !== 'code'
+        const isAi = step.type.startsWith('ai_')
 
         if (isAi && !this.opts.modelConfigured()) {
           statuses[i] = 'skipped'
@@ -130,17 +141,27 @@ export class Executor {
         let error: string | null = null
         let output: unknown
         try {
-          if (isAi) {
-            agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(page, runId)
+          if (step.type === 'api') {
+            const r = await runApiStep(step.content, vars, { timeoutMs: this.opts.stepTimeoutMs })
+            Object.assign(vars, r.extracted)
+            output = r
+          } else if (isAi) {
+            const p = await ensurePage()
+            agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId)
             output = await runAiStep(agent, step.type, step.content)
             if (step.type === 'ai_query') vars[`step${i + 1}`] = output
             else output = undefined
           } else {
-            await runCodeStep(step.content, page, vars, this.opts.stepTimeoutMs * 2)
+            await runCodeStep(step.content, await ensurePage(), vars, this.opts.stepTimeoutMs * 2)
           }
         } catch (e) {
+          if (e instanceof NavigationError) {
+            runError = e.message
+            break
+          }
           status = 'failed'
           error = formatError(e)
+          if (e instanceof ApiStepError) output = e.result
         }
         const durationMs = performance.now() - s0
         const after = usageSnapshot(agent)
@@ -150,7 +171,7 @@ export class Executor {
           error,
           output,
           durationMs,
-          screenshot: await shoot(i),
+          screenshot: step.type === 'api' ? null : await shoot(i),
           aiCalls: after.calls - before.calls,
           tokens: after.tokens - before.tokens,
         })
@@ -170,7 +191,7 @@ export class Executor {
           midsceneReport = path.relative(this.opts.midsceneDir, file)
         }
       }
-      await context.close().catch(() => {})
+      await (context as BrowserContext | null)?.close().catch(() => {})
     }
 
     finishRun(db, runId, {
@@ -181,3 +202,5 @@ export class Executor {
     })
   }
 }
+
+class NavigationError extends Error {}

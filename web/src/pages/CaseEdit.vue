@@ -63,7 +63,7 @@ async function save() {
         <div class="field" style="margin-bottom: 0">
           <label>目标 URL</label>
           <input class="input num" v-model="form.url" data-test="case-url-input" />
-          <div class="hint"><code v-pre>{{DEMO}}</code> 会被替换为平台自带的演示站点地址（登录 + 待办列表，账号 demo / demo123）。</div>
+          <div class="hint"><code v-pre>{{DEMO}}</code> 会被替换为平台自带的演示站点地址（登录 + 待办列表，账号 demo / demo123）；纯接口用例可以留空，不会打开浏览器。</div>
         </div>
       </div>
       <StepsEditor v-model="form.steps" />

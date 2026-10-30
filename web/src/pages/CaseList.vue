@@ -31,7 +31,8 @@ async function run(c: TestCase) {
   router.push(`/runs/${runId}`)
 }
 
-const aiCount = (c: TestCase) => c.steps.filter((s) => s.type !== 'code').length
+const aiCount = (c: TestCase) => c.steps.filter((s) => s.type.startsWith('ai_')).length
+const apiCount = (c: TestCase) => c.steps.filter((s) => s.type === 'api').length
 
 onMounted(load)
 </script>
@@ -65,10 +66,11 @@ onMounted(load)
               <div data-test="case-name">{{ c.name }}</div>
               <div class="muted" style="font-size: 12px" v-if="c.description">{{ c.description }}</div>
             </td>
-            <td class="num" style="font-size: 12px; word-break: break-all">{{ c.url }}</td>
+            <td class="num" style="font-size: 12px; word-break: break-all">{{ c.url || '—（纯接口）' }}</td>
             <td>
               <span class="num">{{ c.steps.length }}</span> 步
               <span class="tag ai" v-if="aiCount(c)" style="margin-left: 6px">AI {{ aiCount(c) }}</span>
+              <span class="tag api" v-if="apiCount(c)" style="margin-left: 6px">接口 {{ apiCount(c) }}</span>
             </td>
             <td>
               <template v-if="c.lastRun">

@@ -10,6 +10,7 @@ import { createCase, deleteCase, getCase, listCases, updateCase } from './repo/c
 import { createRun, getRun, getStats, listRuns } from './repo/runs.js'
 import type { Executor } from './runner/executor.js'
 import { generateDrafts } from './ai/generate.js'
+import { demoApi } from './demo-api.js'
 import { isValidTargetUrl, resolveUrl, validateCase, ValidationError } from './validate.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -39,6 +40,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   // 演示被测站点与运行截图
   await app.register(fastifyStatic, { root: path.join(here, 'demo-site'), prefix: '/demo/' })
+  await app.register(demoApi, { prefix: '/demo-api' })
   fs.mkdirSync(opts.artifactsDir, { recursive: true })
   await app.register(fastifyStatic, { root: opts.artifactsDir, prefix: '/artifacts/', decorateReply: false })
   if (opts.midsceneDir) {

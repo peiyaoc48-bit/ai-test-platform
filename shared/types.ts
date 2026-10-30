@@ -1,11 +1,11 @@
 // 前后端共用的数据结构
 
-/** 步骤类型：三种自然语言步骤交给 Midscene，code 是 Playwright 代码片段 */
-export type StepType = 'ai_action' | 'ai_assert' | 'ai_query' | 'code'
+/** 步骤类型：三种自然语言步骤交给 Midscene，code 是 Playwright 代码片段，api 是 YAML 描述的 HTTP 请求 */
+export type StepType = 'ai_action' | 'ai_assert' | 'ai_query' | 'code' | 'api'
 
 export interface Step {
   type: StepType
-  /** 自然语言描述，或 Playwright 代码（可用变量 page、expect、vars） */
+  /** 自然语言描述、Playwright 代码（可用变量 page、expect、vars）或接口定义（YAML） */
   content: string
 }
 
@@ -13,7 +13,7 @@ export interface TestCase {
   id: number
   name: string
   description: string
-  /** 支持占位符 {{DEMO}}，运行时替换为平台自带演示站点地址 */
+  /** 支持占位符 {{DEMO}}，运行时替换为平台自带演示站点地址；纯接口用例可为空 */
   url: string
   steps: Step[]
   createdAt: string
@@ -36,7 +36,7 @@ export interface StepResult {
   error?: string | null
   /** 相对 /artifacts 的截图路径 */
   screenshot?: string | null
-  /** ai_query 的返回值 */
+  /** ai_query 的返回值，或接口步骤的请求 / 响应摘要 */
   output?: unknown
   aiCalls: number
   tokens: number
@@ -98,4 +98,5 @@ export const STEP_TYPE_LABEL: Record<StepType, string> = {
   ai_assert: 'AI 断言',
   ai_query: 'AI 提取',
   code: 'Playwright 代码',
+  api: '接口请求',
 }

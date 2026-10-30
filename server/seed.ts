@@ -2,7 +2,7 @@ import type { CaseInput } from '../shared/types.js'
 import { createCase, countCases } from './repo/cases.js'
 import type { DB } from './db.js'
 
-/** 示例用例：针对自带演示站点 {{DEMO}}，覆盖纯选择器、混合、纯自然语言三种写法 */
+/** 示例用例：针对自带演示站点 {{DEMO}}，覆盖纯选择器、混合、纯自然语言、纯接口四种写法 */
 export const SAMPLE_CASES: CaseInput[] = [
   {
     name: '登录成功并添加待办（选择器）',
@@ -36,6 +36,64 @@ export const SAMPLE_CASES: CaseInput[] = [
       { type: 'ai_action', content: '删除“阅读 Playwright 文档”这一条待办' },
       { type: 'ai_query', content: 'string[]，列表中所有待办事项的文字' },
       { type: 'ai_assert', content: '待办列表中有“买牛奶”，且没有“阅读 Playwright 文档”' },
+    ],
+  },
+  {
+    name: '待办接口：登录 → 增删改查（接口）',
+    description: '纯接口用例，不打开浏览器：登录拿 token，带 token 调用待办接口，验证鉴权、增删改查与统计。',
+    url: '',
+    steps: [
+      { type: 'api', content: `method: POST
+url: "{{DEMO_API}}/login"
+json: { username: demo, password: demo123 }
+expect:
+  status: 200
+  maxMs: 500
+  json:
+    token: { type: string }
+    username: demo
+extract:
+  token: token` },
+      { type: 'api', content: `# 不带 token 应被拒绝
+method: GET
+url: "{{DEMO_API}}/todos"
+expect:
+  status: 401
+  json:
+    error: { contains: 未登录 }` },
+      { type: 'api', content: `method: POST
+url: "{{DEMO_API}}/todos"
+headers: { Authorization: "Bearer {{token}}" }
+json: { text: 接口新增的待办 }
+expect:
+  status: 201
+  json:
+    done: false
+    text: 接口新增的待办
+extract:
+  todoId: id` },
+      { type: 'api', content: `method: PATCH
+url: "{{DEMO_API}}/todos/{{todoId}}"
+headers: { Authorization: "Bearer {{token}}" }
+json: { done: true }
+expect:
+  status: 200
+  json:
+    done: true` },
+      { type: 'api', content: `method: GET
+url: "{{DEMO_API}}/todos"
+headers: { Authorization: "Bearer {{token}}" }
+expect:
+  status: 200
+  json:
+    total: 3
+    done: 2
+    items: { contains: { text: 接口新增的待办, done: true } }` },
+      { type: 'api', content: `method: DELETE
+url: "{{DEMO_API}}/todos/{{todoId}}"
+headers: { Authorization: "Bearer {{token}}" }
+expect:
+  status: 204` },
     ],
   },
 ]

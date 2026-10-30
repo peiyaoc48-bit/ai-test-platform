@@ -91,3 +91,19 @@ def test_runs_are_queued_in_order(api, case_factory):
 
     listed = api.get(f"/api/runs?caseId={case['id']}").json()
     assert [r["id"] for r in listed] == sorted(run_ids, reverse=True)
+
+
+@allure.story("接口步骤")
+def test_api_only_case_runs_without_browser(api, case_factory):
+    """平台执行纯接口用例：登录 → 提取 token → 带 token 请求；不截图。"""
+    case = case_factory(url="", steps=[
+        {"type": "api", "content": 'method: POST\nurl: "{{DEMO_API}}/login"\n'
+                                   "json: { username: demo, password: demo123 }\n"
+                                   "expect: { status: 200 }\nextract: { token: token }"},
+        {"type": "api", "content": 'url: "{{DEMO_API}}/me"\nheaders: { Authorization: "Bearer {{token}}" }\n'
+                                   "expect:\n  status: 200\n  json:\n    username: demo"},
+    ])
+    run = api.wait_run(api.run_case(case["id"]).json()["runId"])
+    assert run["status"] == "passed", run
+    assert all(s["screenshot"] is None for s in run["steps"])
+    assert run["steps"][1]["output"]["response"]["body"] == {"username": "demo"}

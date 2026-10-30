@@ -23,7 +23,7 @@ const row = (page: Page, name: string) => page.getByTestId('case-row').filter({ 
 test('首页展示示例用例与“未配置模型”状态', async ({ page }) => {
   await page.goto('/')
   await expect(page).toHaveURL(/\/cases$/)
-  await expect(page.getByTestId('case-row')).toHaveCount(3)
+  await expect(page.getByTestId('case-row')).toHaveCount(4)
   await expect(page.getByTestId('model-status')).toContainText('未配置模型')
 })
 
@@ -94,4 +94,27 @@ test('AI 生成页：未配置模型时提示且不可生成', async ({ page }) 
   await expect(page.getByTestId('no-model')).toContainText('未配置大模型')
   await page.getByTestId('fill-example').click()
   await expect(page.getByTestId('generate')).toBeDisabled()
+})
+
+test('纯接口用例：不打开浏览器，报告展示请求与响应', async ({ page }) => {
+  await page.goto('/cases')
+  await row(page, '待办接口').getByTestId('run').click()
+  await expect(page.getByTestId('run-status')).toHaveText('通过', { timeout: 30_000 })
+  await expect(page.getByTestId('step-status')).toHaveText(Array(6).fill('通过'))
+  const first = page.getByTestId('api-exchange').first()
+  await expect(first).toContainText('POST')
+  await expect(first).toContainText('200')
+  await expect(first).toContainText('token =')
+  await expect(page.getByText('纯接口用例（未打开浏览器）')).toBeVisible()
+})
+
+test('保存时校验接口步骤的 YAML', async ({ page }) => {
+  await page.goto('/cases/new')
+  await page.getByTestId('case-name-input').fill('坏的接口步骤')
+  await page.getByTestId('case-url-input').fill('')
+  await page.getByTestId('step-remove').click()
+  await page.getByTestId('add-api-step').click()
+  await page.getByTestId('step-content').fill('method: GET')
+  await page.getByTestId('save-case').click()
+  await expect(page.getByTestId('form-error')).toContainText('第 1 步接口定义有误：缺少 url')
 })

@@ -19,6 +19,7 @@ const executor = new Executor({
   headless: config.headless,
   stepTimeoutMs: config.stepTimeoutMs,
   modelConfigured: () => modelConfig().configured,
+  templateVars: () => ({ DEMO: demoBaseUrl(), DEMO_API: `http://127.0.0.1:${config.port}/demo-api` }),
 })
 
 const app = await buildApp({

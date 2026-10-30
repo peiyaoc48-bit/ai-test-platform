@@ -27,6 +27,17 @@ describe('validateCase', () => {
     expect(() => validateCase(input)).toThrow(msg)
   })
 
+  it('纯接口用例 URL 可以为空；含页面步骤时 URL 必填', () => {
+    const api = { type: 'api', content: 'url: http://a.com' }
+    expect(validateCase({ name: 'x', url: '', steps: [api] }).url).toBe('')
+    expect(() => validateCase({ name: 'x', url: '', steps: [api, ok.steps[0]] })).toThrow('目标 URL')
+    expect(() => validateCase({ name: 'x', url: 'ftp://a', steps: [api] })).toThrow('目标 URL')
+  })
+
+  it('保存时校验接口步骤的 YAML', () => {
+    expect(() => validateCase({ ...ok, steps: [{ type: 'api', content: 'method: GET' }] })).toThrow('第 1 步接口定义有误：缺少 url')
+  })
+
   it('最多 50 步', () => {
     const steps = Array.from({ length: 51 }, () => ({ type: 'ai_action', content: '点击' }))
     expect(() => validateCase({ ...ok, steps })).toThrow('不能超过 50')
