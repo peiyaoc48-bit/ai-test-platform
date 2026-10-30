@@ -1,6 +1,6 @@
 # AI 驱动的 UI 自动化测试平台
 
-在 Web 页面上管理 UI 测试用例、一键执行、查看报告。用例步骤可以写 **Playwright 代码**（选择器，快且确定），也可以写**自然语言**（交给 [Midscene.js](https://midscenejs.com/) 视觉模型看截图执行），两种步骤可以写在同一个用例里。还能粘贴需求文本，让大模型生成用例草稿，人工审核后再入库。
+在 Web 页面上管理测试用例、一键执行、查看报告。用例步骤可以写 **Playwright 代码**（选择器，快且确定）、**自然语言**（交给 [Midscene.js](https://midscenejs.com/) 视觉模型看截图执行）或**接口请求**（YAML 描述请求、断言和变量提取），几种步骤可以写在同一个用例里。用例可以组成用例集批量运行，导出 JUnit 报告接入 CI。还能粘贴需求文本，让大模型生成用例草稿，人工审核后再入库。
 
 > 定位：帮团队从“手工点页面”过渡到自动化，让不熟悉代码的测试同学先用自然语言写用例，稳定之后再沉淀成选择器脚本。
 
@@ -10,11 +10,13 @@
 
 | 模块 | 说明 |
 |---|---|
-| 用例管理 | 新建 / 编辑 / 删除用例；一个用例 = 目标 URL + 步骤列表；步骤有四种：AI 操作（`aiAct`）、AI 断言（`aiAssert`）、AI 提取（`aiQuery`）、Playwright 代码片段；数据存在 SQLite |
+| 用例管理 | 新建 / 编辑 / 删除用例；一个用例 = 目标 URL + 步骤列表；步骤有五种：AI 操作（`aiAct`）、AI 断言（`aiAssert`）、AI 提取（`aiQuery`）、Playwright 代码片段、接口请求；数据存在 SQLite |
+| 接口测试 | 接口步骤用 YAML 描述 `method / url / headers / json`，断言状态码、响应耗时、响应头和 JSON 字段（`eq / exists / contains / len / gt / lt / type`），用 `extract` 提取变量供后续步骤引用（接口关联）。纯接口用例不启动浏览器，报告展示请求与响应（鉴权头脱敏） |
 | 一键执行 | 后端用 Playwright 驱动 Chrome 执行；运行进入串行队列异步执行，前端每 0.8 秒轮询一次，实时看到每一步的状态。未配置模型时自然语言步骤标记为“跳过（未配置模型）”，代码步骤照常执行 |
 | 测试报告 | 每一步都记录状态、耗时、截图（失败步骤大图展示）、模型调用次数和 token；报告页有运行通过率、平均耗时、每日通过率趋势、最近 30 次耗时柱状图和历史运行列表，可按用例和时间范围筛选 |
+| 用例集与 CI | 用例可以组成用例集，或在列表里勾选多个用例批量运行；批次页显示进度与汇总，可下载 JUnit XML。`npm run ci:run -- --suite 冒烟` 触发用例集并轮询到结束，有失败时以非 0 退出，让流水线变红 |
 | AI 生成用例 | 粘贴需求文本，调用 OpenAI 兼容接口生成用例草稿（自然语言步骤）；草稿可修改、可取消勾选，点“保存”后才入库 |
-| 演示站点 | 自带一个离线的被测站点（登录 + 待办列表，账号 `demo / demo123`），另附 3 条示例用例，不联网也能演示整条链路 |
+| 演示站点 | 自带一个离线的被测站点：页面（登录 + 待办列表，账号 `demo / demo123`）和后端接口 `/demo-api`（登录发放 token，带 token 增删改查待办，每个会话的数据互相隔离）。另附 4 条示例用例和一个“冒烟”用例集，不联网也能演示整条链路 |
 
 ## 快速开始
 
@@ -26,7 +28,7 @@ npm install
 npm run dev
 ```
 
-打开 <http://localhost:5173>（如果端口被占用，Vite 会自动换一个，以终端输出为准）。首次启动会自动创建 `data/platform.db`，并写入 3 条示例用例。
+打开 <http://localhost:5173>（如果端口被占用，Vite 会自动换一个，以终端输出为准）。首次启动会自动创建 `data/platform.db`，并写入 4 条示例用例和“冒烟”用例集。
 
 - 浏览器默认用本机安装的 **Google Chrome**（`BROWSER_CHANNEL=chrome`），不用另外下载 Chromium。没有 Chrome 时，先执行 `npx playwright install chromium`，再在 `.env` 里写 `BROWSER_CHANNEL=`。
 - 配置模型：复制 `.env.example` 为 `.env`，填写 `MIDSCENE_MODEL_BASE_URL / MIDSCENE_MODEL_API_KEY / MIDSCENE_MODEL_NAME`，然后重启。用阿里云百炼时，可以用通用地址或工作空间专属地址；视觉模型响应慢，`MIDSCENE_MODEL_TIMEOUT` 建议设为 120000。`.env` 已加入 `.gitignore`。
@@ -35,11 +37,15 @@ npm run dev
 ## 测试
 
 ```bash
-npm test            # vitest：43 条单元 / 集成测试
+npm test            # vitest：97 条单元 / 集成测试
 ```
 
 ```bash
-npm run test:e2e    # Playwright：8 条平台自身的端到端测试（会先构建前端）
+npm run test:e2e    # Playwright：12 条平台自身的端到端测试（会先构建前端）
+```
+
+```bash
+npm run test:api:setup && npm run test:api   # pytest：66 条接口自动化用例（见 api-tests/README.md）
 ```
 
 ```bash
@@ -48,6 +54,8 @@ npm run typecheck   # tsc + vue-tsc
 
 - **单元测试**：用例校验、URL 占位符、代码片段编译与超时、运行结论推导、模型输出的 JSON 解析（代码块包裹、类型别名、无效步骤丢弃）、OpenAI 兼容请求格式。
 - **集成测试**（`tests/unit/platform.test.ts`）：真实 Fastify + 内存 SQLite + 本机 Chrome 跑演示站点。自然语言步骤由注入的**假 Agent** 执行，用来验证跳过逻辑、每步 token 统计、失败截图、失败后的步骤标记为“未执行”、`vars` 传值、统计口径。
+- **接口自动化**（`api-tests/`，Python）：pytest + requests 分层框架（客户端 / 契约 / 断言 / YAML 数据 / 夹具），测平台接口和演示站点接口：CRUD 与 JSON Schema 契约、数据驱动的参数校验与边界值、登录鉴权与 token 关联、异步接口“提交 → 轮询”、统计口径、CI 脚本的退出码。
+- **CI**（`.github/workflows/ci.yml`）：类型检查 → vitest → E2E → pytest → 启动平台执行“冒烟”用例集，并上传全部报告。
 - **E2E**（`e2e/`）：起两个互相隔离的平台实例。`nomodel` 实例验证“新建 → 执行 → 报告”、失败截图、跳过提示、编辑删除和表单校验；`mockmodel` 实例指向本地假模型（`e2e/mock-llm.ts`），验证“生成 → 审核 → 入库”的流程。假模型只用于测试流程，**不代表真实模型的生成效果**。
 
 ## 架构
@@ -58,25 +66,28 @@ flowchart LR
     UI["用例管理 / 运行详情 / 报告 / AI 生成"]
   end
   subgraph Server["Node 服务（Fastify + TypeScript）"]
-    API["REST API<br/>/api/cases /api/runs /api/stats /api/generate"]
+    API["REST API<br/>/api/cases /api/runs /api/suites<br/>/api/batches /api/stats /api/generate"]
     Q["Executor<br/>串行队列 · 每次运行一个 BrowserContext"]
     GEN["generate.ts<br/>OpenAI 兼容 chat/completions"]
-    DB[("SQLite<br/>cases / runs / run_steps")]
+    DB[("SQLite<br/>cases / suites / batches<br/>runs / run_steps")]
     FS["data/artifacts 截图<br/>data/midscene 回放报告"]
   end
   subgraph Run["被测页面"]
     PW["Playwright 代码步骤<br/>page / expect / vars"]
     MS["Midscene PlaywrightAgent<br/>aiAct / aiAssert / aiQuery"]
+    AP["接口步骤<br/>fetch + 断言 + extract"]
   end
+  CI["CI：ci-run 脚本<br/>JUnit XML"]
   LLM["视觉 / 文本大模型<br/>（如 qwen3-vl-plus）"]
-  DEMO["演示站点 /demo"]
+  DEMO["演示站点 /demo<br/>+ 后端 /demo-api"]
 
   UI -- "轮询 0.8s" --> API
   API --> DB
   API -- enqueue --> Q
-  Q --> PW & MS
+  CI -- 触发用例集 / 轮询 --> API
+  Q --> PW & MS & AP
   MS -- 截图 + 指令 --> LLM
-  PW & MS --> DEMO
+  PW & MS & AP --> DEMO
   Q -- 每步写库 / 截图 --> DB & FS
   API --> GEN --> LLM
 ```
@@ -85,9 +96,12 @@ flowchart LR
 
 ```
 server/
-  app.ts            路由（用例、执行、统计、生成）
-  runner/executor.ts  执行器：队列、浏览器复用、逐步执行、截图、用量差值
+  app.ts            路由（用例、执行、用例集与批次、统计、生成）
+  runner/executor.ts  执行器：队列、浏览器按需启动、逐步执行、截图、用量差值
   runner/steps.ts     代码片段编译与超时、运行结论推导
+  runner/api-step.ts  接口步骤：YAML 解析、变量渲染、请求、断言、变量提取
+  report/junit.ts     批次导出 JUnit XML
+  demo-api.ts         演示站点后端（登录鉴权 + 待办增删改查）
   runner/ai.ts        Midscene Agent 工厂（可替换，便于测试）
   ai/generate.ts      需求 → 用例草稿（提示词、调用、解析）
   repo/               SQLite 读写与统计
@@ -96,6 +110,9 @@ shared/types.ts     前后端共用的类型
 web/src/            Vue 页面与组件（含手写的 SVG 趋势图）
 tests/unit/         vitest
 e2e/                平台自身的 Playwright E2E 与假模型
+api-tests/          Python 接口自动化（pytest + requests）
+scripts/ci-run.ts   CI 触发脚本
+.github/workflows/  GitHub Actions
 ```
 
 ## 截图
@@ -107,6 +124,10 @@ e2e/                平台自身的 Playwright E2E 与假模型
 | 测试报告 | 用例编辑 |
 |---|---|
 | ![](docs/screenshots/reports.png) | ![](docs/screenshots/case-edit.png) |
+
+| 接口步骤：请求、断言、提取的变量 | 用例集批量运行（可下载 JUnit） |
+|---|---|
+| ![](docs/screenshots/run-api.png) | ![](docs/screenshots/batch.png) |
 
 | AI 生成：未配置模型时的提示 | AI 生成：草稿审核（截图里的数据来自 E2E 假模型） |
 |---|---|
@@ -137,6 +158,10 @@ e2e/                平台自身的 Playwright E2E 与假模型
 
 ### 其他取舍
 
+- **接口步骤用 YAML 而不是代码**：请求、断言、提取都是声明式的，不会写代码的同学也能维护，保存时就能校验语法；需要复杂逻辑时，同一个用例里仍可写代码步骤，并通过 `vars` 读取接口提取的变量。断言失败时一次性列出所有不符合的点，而不是只报第一个。
+- **接口和页面混用**：先用接口造数据（快、稳定），再到页面上验证展示，比全程点页面快一个数量级；纯接口用例完全不启动浏览器。
+- **批次与 JUnit**：一次批量执行就是一个批次，批次状态由所含运行推导，不单独存状态，避免不一致。导出 JUnit 是为了直接接入 Jenkins / GitLab / GitHub Actions 的测试报告展示；CI 脚本通过退出码让流水线变红。
+
 - **未配置模型时“跳过”而不是“失败”**：这样不会因为环境缺少 key 把整条流水线标红。只要有一步失败，整次运行就判为失败；部分步骤跳过仍算通过（报告里有醒目提示）；全部步骤都被跳过时记为“跳过”，不计入通过率。
 - **失败即停**：某一步失败后，剩余步骤标记为“未执行”，不再继续，避免后续报错掩盖真正的失败点。每一步都截图（JPEG，体积小），失败步骤在报告中大图展示。
 - **串行队列 + 轮询**：MVP 阶段只复用一个浏览器实例，每次运行新建一个 BrowserContext，彼此隔离。每一步结束就写库，前端轮询即可看到实时进度，比 SSE 简单，也不怕连接中断。要并发执行时，扩展成 worker 池即可。
@@ -148,4 +173,5 @@ e2e/                平台自身的 Playwright E2E 与假模型
 ## 已知限制
 
 - 本仓库的自动化测试都没有调用真实模型（自然语言步骤由假 Agent 或假模型代替）。真实的视觉执行效果和 token 数据，需要配置 key 后实际运行才能看到。
-- 暂不支持并发执行、定时任务、多用户权限和 CI 触发接口。
+- 执行队列是串行的（一次一个运行）；暂不支持并发执行、定时任务和多用户权限。
+- GitHub Actions 工作流还没有在远程仓库上实际运行过。

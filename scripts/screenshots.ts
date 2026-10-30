@@ -28,6 +28,19 @@ if (passed) {
   await page.goto(`${base}/runs/${passed.id}`)
   await shot('run-passed', true)
 }
+const apiRun = runs.find((r: any) => r.caseName.includes('（接口）') && r.status === 'passed')
+if (apiRun) {
+  await page.goto(`${base}/runs/${apiRun.id}`)
+  await page.locator('[data-test=api-exchange] summary').first().click()
+  await shot('run-api')
+}
+const batches = await (await page.request.get(`${base}/api/batches`)).json()
+if (batches[0]) {
+  await page.goto(`${base}/batches/${batches[0].id}`)
+  await shot('batch')
+}
+await page.goto(`${base}/suites`)
+await shot('suites')
 await page.goto(`${base}/reports`)
 await page.hover('svg path.col >> nth=5').catch(() => {})
 await shot('reports')
