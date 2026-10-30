@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canEdit } from '../session'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { AlertCircle, Lightbulb, Play, Save } from 'lucide-vue-next'
@@ -30,7 +31,7 @@ onMounted(async () => {
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 // ⌘S / Ctrl+S 保存
 function onKey(e: KeyboardEvent) {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && canEdit.value) {
     e.preventDefault()
     void save()
   }
@@ -78,6 +79,7 @@ async function save(thenRun = false) {
         <div class="sub">自然语言步骤由 Midscene 视觉模型理解截图后执行；代码步骤直接运行 Playwright；接口步骤发 HTTP 请求并断言。</div>
       </div>
     </div>
+    <div v-if="!canEdit" class="alert warn"><AlertCircle :size="16" />演示站点为只读：可以查看用例内容，登录后才能保存修改。</div>
     <div v-if="error" class="alert error" data-test="form-error"><AlertCircle :size="16" />{{ error }}</div>
     <form @submit.prevent="save()" v-if="loaded" class="layout">
       <div class="main-col">
@@ -104,8 +106,8 @@ async function save(thenRun = false) {
 
       <aside class="side">
         <div class="card sticky">
-          <button class="btn primary block" type="submit" :disabled="saving" data-test="save-case"><Save :size="15" />保存用例</button>
-          <button class="btn block" type="button" :disabled="saving" @click="save(true)" data-test="save-run"><Play :size="14" />保存并运行</button>
+          <button class="btn primary block" type="submit" :disabled="saving || !canEdit" data-test="save-case"><Save :size="15" />保存用例</button>
+          <button class="btn block" type="button" :disabled="saving || !canEdit" @click="save(true)" data-test="save-run"><Play :size="14" />保存并运行</button>
           <RouterLink class="btn block" to="/cases">取消</RouterLink>
           <div class="hint" style="text-align: center">⌘S / Ctrl+S 保存</div>
           <div class="stats">

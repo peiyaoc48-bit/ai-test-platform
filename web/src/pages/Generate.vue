@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canEdit } from '../session'
 import { AlertCircle, Loader2, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -71,6 +72,7 @@ async function save() {
       </div>
     </div>
 
+    <div v-if="!canEdit" class="alert warn"><TriangleAlert :size="16" /><div>演示站点为只读：AI 生成会消耗模型 token，登录后才能使用。</div></div>
     <div v-if="config && !config.modelConfigured" class="alert warn" data-test="no-model">
       <TriangleAlert :size="16" />
       <div>
@@ -92,7 +94,7 @@ async function save() {
           <input class="input num" v-model="url" />
         </div>
         <div style="display: flex; align-items: center; gap: 10px">
-          <button class="btn primary" @click="generate" :disabled="loading || !config?.modelConfigured || requirement.trim().length < 10" data-test="generate">
+          <button class="btn primary" @click="generate" :disabled="loading || !canEdit || !config?.modelConfigured || requirement.trim().length < 10" data-test="generate">
             <Loader2 v-if="loading" :size="14" class="spin" /><Sparkles v-else :size="14" />
             {{ loading ? `生成中…（${elapsed}s）` : '生成用例草稿' }}
           </button>

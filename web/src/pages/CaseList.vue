@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canEdit } from '../session'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { AlertCircle, Download, FileText, Pencil, Play, Plus, Search, ShieldCheck, Trash2 } from 'lucide-vue-next'
@@ -83,7 +84,7 @@ onMounted(load)
       </div>
       <div class="head-actions">
         <button class="btn" :disabled="!picked.length" @click="runPicked" data-test="run-picked"><Play :size="14" />批量运行所选（{{ picked.length }}）</button>
-        <RouterLink class="btn primary" to="/cases/new" data-test="new-case"><Plus :size="15" />新建用例</RouterLink>
+        <RouterLink v-if="canEdit" class="btn primary" to="/cases/new" data-test="new-case"><Plus :size="15" />新建用例</RouterLink>
       </div>
     </div>
     <div v-if="error" class="alert error" data-test="list-error"><AlertCircle :size="16" />{{ error }}</div>
@@ -137,8 +138,8 @@ onMounted(load)
                 <button class="btn sm primary" @click="run(c)" data-test="run"><Play :size="13" />运行</button>
                 <button class="icon-btn" v-if="c.steps.some((s) => s.type !== 'api')" @click="robustness(c)" data-test="robustness" title="鲁棒性对比：在无变更、去掉测试标记、更换视觉样式下各运行一次"><ShieldCheck :size="16" /></button>
                 <a class="icon-btn" :href="`/api/cases/${c.id}/export${currentEnvId ? `?envId=${currentEnvId}` : ''}`" data-test="export" title="导出为 Playwright 测试文件（按当前环境展开）"><Download :size="16" /></a>
-                <RouterLink class="icon-btn" :to="`/cases/${c.id}/edit`" data-test="edit" title="编辑"><Pencil :size="15" /></RouterLink>
-                <button class="icon-btn danger" @click="remove(c)" data-test="delete" title="删除"><Trash2 :size="15" /></button>
+                <RouterLink v-if="canEdit" class="icon-btn" :to="`/cases/${c.id}/edit`" data-test="edit" title="编辑"><Pencil :size="15" /></RouterLink>
+                <button v-if="canEdit" class="icon-btn danger" @click="remove(c)" data-test="delete" title="删除"><Trash2 :size="15" /></button>
               </div>
             </td>
           </tr>
@@ -148,7 +149,7 @@ onMounted(load)
       <div v-else-if="!cases.length" class="empty">
         <FileText :size="32" />
         <div>还没有用例</div>
-        <RouterLink class="btn primary" to="/cases/new"><Plus :size="15" />新建第一个用例</RouterLink>
+        <RouterLink v-if="canEdit" class="btn primary" to="/cases/new"><Plus :size="15" />新建第一个用例</RouterLink>
       </div>
       <div v-else-if="!filtered.length" class="empty">没有符合条件的用例</div>
     </div>

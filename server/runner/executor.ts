@@ -41,6 +41,11 @@ export class Executor {
 
   constructor(private opts: ExecutorOptions) {}
 
+  /** 排队中 + 执行中的运行数 */
+  pending() {
+    return this.queue.length + (this.busy ? 1 : 0)
+  }
+
   enqueue(runId: number) {
     this.queue.push(runId)
     void this.drain()

@@ -29,9 +29,10 @@ const app = await buildApp({
   artifactsDir,
   midsceneDir: config.midsceneDir,
   executor,
+  access: config.access,
   webDist: process.env.NODE_ENV === 'production' ? path.resolve('dist') : undefined,
 })
-await app.listen({ port: config.port, host: '127.0.0.1' })
+await app.listen({ port: config.port, host: config.host })
 console.log(`[platform] API  http://127.0.0.1:${config.port}/api`)
 console.log(`[platform] 演示站点 ${demoBaseUrl()}/index.html`)
 

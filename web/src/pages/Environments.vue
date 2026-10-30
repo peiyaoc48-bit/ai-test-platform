@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canEdit } from '../session'
 import { Check, Pencil, Plus, Trash2 } from 'lucide-vue-next'
 import { confirmDialog, toast } from '../ui/feedback'
 import { onMounted, ref } from 'vue'
@@ -25,7 +26,7 @@ onMounted(load)
         <h1>环境</h1>
         <div class="sub">同一套用例在不同环境运行：被测地址、变量、浏览器启动参数、权限、预置本地存储和超时都在这里配置。顶栏可切换当前环境。</div>
       </div>
-      <RouterLink class="btn primary" to="/environments/new" data-test="new-env"><Plus :size="15" />新建环境</RouterLink>
+      <RouterLink v-if="canEdit" class="btn primary" to="/environments/new" data-test="new-env"><Plus :size="15" />新建环境</RouterLink>
     </div>
     <div class="card flush">
       <table class="table" data-test="env-table">
@@ -55,8 +56,8 @@ onMounted(load)
             <td>
               <div class="actions">
                 <button class="btn sm" :disabled="currentEnvId === e.id" @click="currentEnvId = e.id; toast(`当前环境：${e.name}`, 'info')" data-test="use-env"><Check :size="13" />设为当前</button>
-                <RouterLink class="icon-btn" :to="`/environments/${e.id}/edit`" title="编辑"><Pencil :size="15" /></RouterLink>
-                <button class="icon-btn danger" @click="remove(e)" title="删除"><Trash2 :size="15" /></button>
+                <RouterLink v-if="canEdit" class="icon-btn" :to="`/environments/${e.id}/edit`" title="编辑"><Pencil :size="15" /></RouterLink>
+                <button v-if="canEdit" class="icon-btn danger" @click="remove(e)" title="删除"><Trash2 :size="15" /></button>
               </div>
             </td>
           </tr>

@@ -14,6 +14,7 @@ import { getDashboard } from './repo/dashboard.js'
 import { exportPlaywright } from './report/export.js'
 import type { Executor } from './runner/executor.js'
 import { generateDrafts } from './ai/generate.js'
+import { type AccessOptions, registerAccess } from './access.js'
 import { isMutation } from './runner/mutations.js'
 import type { Mutation } from '../shared/types.js'
 import { buildVars, resolveTemplate } from './env.js'
@@ -34,6 +35,8 @@ export interface AppOptions {
   logger?: boolean
   /** 测试时注入假的 fetch */
   fetchImpl?: typeof fetch
+  /** 公网部署时的访问控制；不传则所有人都是管理员 */
+  access?: Omit<AccessOptions, 'queueLength'>
 }
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
@@ -45,6 +48,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     if (status >= 500) app.log.error(err)
     reply.status(status).send({ error: err.message, code: err.code })
   })
+
+  registerAccess(app, { ...opts.access, queueLength: () => opts.executor.pending() })
 
   // 演示被测站点与运行截图
   await app.register(fastifyStatic, { root: path.join(here, 'demo-site'), prefix: '/demo/' })

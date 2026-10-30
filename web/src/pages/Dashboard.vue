@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canEdit } from '../session'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Activity, AlertTriangle, CheckCircle2, Clock, FileText, Plus, Sparkles, TrendingDown, TrendingUp, Zap } from 'lucide-vue-next'
@@ -32,7 +33,7 @@ const trend = computed<Point[]>(() =>
         <h1>概览</h1>
         <div class="sub">近 7 天的执行情况、需要关注的失败与不稳定用例。变更注入（鲁棒性对比）的运行不计入统计。</div>
       </div>
-      <div class="head-actions">
+      <div class="head-actions" v-if="canEdit">
         <RouterLink class="btn" to="/generate"><Sparkles :size="15" />AI 生成用例</RouterLink>
         <RouterLink class="btn primary" to="/cases/new"><Plus :size="15" />新建用例</RouterLink>
       </div>

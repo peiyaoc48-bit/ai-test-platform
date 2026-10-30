@@ -191,6 +191,15 @@ export interface DashboardData {
   flakyRule: { window: number; minTransitions: number }
 }
 
+/** admin：可编辑；viewer：公开演示的只读访客；anonymous：需登录 */
+export type Role = 'admin' | 'viewer' | 'anonymous'
+
+export interface SessionInfo {
+  role: Role
+  authRequired: boolean
+  publicDemo: boolean
+}
+
 export interface PlatformConfig {
   modelConfigured: boolean
   modelName: string | null

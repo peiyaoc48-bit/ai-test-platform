@@ -18,6 +18,14 @@ export const config = {
   stepTimeoutMs: Number(env.STEP_TIMEOUT_MS || 15_000),
   /** Midscene 缓存：重复运行同一用例时复用 AI 规划与定位结果，减少模型调用 */
   aiCache: env.AI_CACHE !== 'false',
+  /** 公网部署：访问口令（设置后需登录才能编辑）、是否允许未登录访客只读访问、会话签名密钥 */
+  access: {
+    accessCode: env.ACCESS_CODE || undefined,
+    publicDemo: env.PUBLIC_DEMO === 'true',
+    secret: env.SESSION_SECRET || undefined,
+    maxQueue: Number(env.PUBLIC_MAX_QUEUE || 5),
+  },
+  host: env.HOST || '127.0.0.1',
 }
 
 /** 每次读取，便于测试中修改环境变量 */

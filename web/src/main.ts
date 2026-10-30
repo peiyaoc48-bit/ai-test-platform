@@ -12,6 +12,8 @@ import SuiteEdit from './pages/SuiteEdit.vue'
 import BatchDetail from './pages/BatchDetail.vue'
 import Environments from './pages/Environments.vue'
 import EnvironmentEdit from './pages/EnvironmentEdit.vue'
+import Login from './pages/Login.vue'
+import { loadSession } from './session'
 import './style.css'
 
 const CASES = { label: '用例管理', to: '/cases' }
@@ -23,6 +25,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/dashboard' },
+    { path: '/login', component: Login, meta: { bare: true } },
     { path: '/dashboard', component: Dashboard, meta: { nav: 'dashboard', crumbs: [{ label: '概览' }] } },
     { path: '/cases', component: CaseList, meta: { nav: 'cases', crumbs: [CASES] } },
     { path: '/cases/new', component: CaseEdit, meta: { nav: 'cases', crumbs: [CASES, { label: '新建用例' }] } },
@@ -41,4 +44,5 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-createApp(App).use(router).mount('#app')
+// 先确定访问身份，再渲染（只读访客看不到编辑入口）
+loadSession().finally(() => createApp(App).use(router).mount('#app'))

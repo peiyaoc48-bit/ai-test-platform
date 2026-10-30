@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { canEdit } from '../session'
 import { Boxes, Pencil, Play, Plus, Trash2 } from 'lucide-vue-next'
 import StatusBadge from '../ui/StatusBadge.vue'
 import { confirmDialog, toast } from '../ui/feedback'
@@ -40,7 +41,7 @@ onMounted(load)
         <h1>用例集</h1>
         <div class="sub">把多个用例组成用例集一键批量运行；CI 中用 <code>npm run ci:run -- --suite 名称</code> 触发，并导出 JUnit 报告。</div>
       </div>
-      <RouterLink class="btn primary" to="/suites/new" data-test="new-suite"><Plus :size="15" />新建用例集</RouterLink>
+      <RouterLink v-if="canEdit" class="btn primary" to="/suites/new" data-test="new-suite"><Plus :size="15" />新建用例集</RouterLink>
     </div>
     <div v-if="error" class="alert error">{{ error }}</div>
     <div class="card flush">
@@ -66,8 +67,8 @@ onMounted(load)
             <td>
               <div class="actions">
                 <button class="btn sm primary" @click="run(s)" data-test="run-suite"><Play :size="13" />运行</button>
-                <RouterLink class="icon-btn" :to="`/suites/${s.id}/edit`" title="编辑"><Pencil :size="15" /></RouterLink>
-                <button class="icon-btn danger" @click="remove(s)" title="删除"><Trash2 :size="15" /></button>
+                <RouterLink v-if="canEdit" class="icon-btn" :to="`/suites/${s.id}/edit`" title="编辑"><Pencil :size="15" /></RouterLink>
+                <button v-if="canEdit" class="icon-btn danger" @click="remove(s)" title="删除"><Trash2 :size="15" /></button>
               </div>
             </td>
           </tr>

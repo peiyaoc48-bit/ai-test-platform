@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { BarChart3, Boxes, ChevronRight, FileText, LayoutDashboard, Server, Sparkles } from 'lucide-vue-next'
+import { BarChart3, Boxes, ChevronRight, Eye, FileText, LayoutDashboard, LogIn, LogOut, Server, ShieldCheck, Sparkles } from 'lucide-vue-next'
 import { currentEnvId } from './env-store'
 import { api } from './api'
 import FeedbackLayer from './ui/FeedbackLayer.vue'
+import { loadSession, session } from './session'
+import { toast } from './ui/feedback'
 import type { Environment, PlatformConfig } from '../../shared/types'
 
 const route = useRoute()
@@ -20,11 +22,17 @@ const loadMeta = async () => {
   if (currentEnvId.value && !envs.value.some((x) => x.id === currentEnvId.value)) currentEnvId.value = null
 }
 onMounted(async () => {
+  if (route.meta.bare) return
   config.value = await api.config()
   await loadMeta()
 })
+async function logout() {
+  await api.logout()
+  await loadSession()
+  toast('已退出登录', 'info')
+}
 // 增删改后回到其他页面时刷新计数和环境下拉框
-watch(() => route.path, loadMeta)
+watch(() => route.path, () => !route.meta.bare && loadMeta())
 
 const groups = computed(() => [
   { title: '', items: [{ key: 'dashboard', to: '/dashboard', label: '概览', icon: LayoutDashboard }] },
@@ -45,7 +53,8 @@ const crumbs = computed(() => (route.meta.crumbs as { label: string; to?: string
 </script>
 
 <template>
-  <div class="shell">
+  <RouterView v-if="route.meta.bare" />
+  <div class="shell" v-else>
     <aside class="sidebar">
       <RouterLink to="/dashboard" class="brand">
         <span class="brand-mark">
@@ -84,6 +93,10 @@ const crumbs = computed(() => (route.meta.crumbs as { label: string; to?: string
           </template>
         </nav>
         <div class="header-right">
+          <span v-if="session.role === 'viewer'" class="role viewer" data-test="role"><Eye :size="13" />访客 · 只读</span>
+          <span v-else-if="session.authRequired" class="role admin" data-test="role"><ShieldCheck :size="13" />管理员</span>
+          <RouterLink v-if="session.role === 'viewer'" class="btn sm" to="/login" data-test="to-login"><LogIn :size="13" />登录</RouterLink>
+          <button v-else-if="session.authRequired" class="btn sm" @click="logout" data-test="logout"><LogOut :size="13" />退出</button>
           <label class="env-switch" title="单个用例运行、批量运行和导出都使用当前环境">
             <Server :size="14" />
             环境
@@ -99,3 +112,9 @@ const crumbs = computed(() => (route.meta.crumbs as { label: string; to?: string
   </div>
   <FeedbackLayer />
 </template>
+
+<style scoped>
+.role { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 12px; font-size: 12px; }
+.role.viewer { background: var(--skip-soft); color: var(--skip); }
+.role.admin { background: var(--pass-soft); color: var(--pass); }
+</style>

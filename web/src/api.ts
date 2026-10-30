@@ -16,11 +16,17 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   })
   if (res.status === 204) return undefined as T
   const data = await res.json().catch(() => ({}))
+  // 公网部署且未开放访客访问时，未登录跳转到登录页
+  if (res.status === 401 && data.code === 'LOGIN_REQUIRED' && location.pathname !== '/login') {
+    location.assign(`/login?next=${encodeURIComponent(location.pathname)}`)
+  }
   if (!res.ok) throw Object.assign(new Error(data.error || `请求失败（${res.status}）`), { code: data.code })
   return data as T
 }
 
 export const api = {
+  login: (code: string) => request<{ role: string }>('POST', '/api/login', { code }),
+  logout: () => request<{ role: string }>('POST', '/api/logout'),
   dashboard: () => request<DashboardData>('GET', '/api/dashboard'),
   config: () => request<PlatformConfig>('GET', '/api/config'),
   listCases: () => request<TestCase[]>('GET', '/api/cases'),
