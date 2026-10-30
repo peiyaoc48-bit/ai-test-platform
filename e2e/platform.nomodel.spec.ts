@@ -179,3 +179,12 @@ test('环境：配置基础地址和预置本地存储，切换当前环境后�
   await row(page, 'E2E 按环境运行').getByTestId('run').click()
   await expect(page.getByTestId('list-error')).toContainText('{{BASE_URL}} 未定义')
 })
+
+test('鲁棒性对比：同一用例在三种界面变更下运行，矩阵展示每一步结果', async ({ page }) => {
+  test.setTimeout(150_000) // “去掉测试标记”时每个选择器要等到超时才失败
+  await page.goto('/cases')
+  await row(page, '登录成功并添加待办').getByTestId('robustness').click()
+  await expect(page).toHaveURL(/\/batches\/\d+$/)
+  await expect(page.getByTestId('batch-status')).toHaveText('失败', { timeout: 120_000 })
+  await expect(page.getByTestId('matrix-rate')).toHaveText(['100%', '0%', '100%'])
+})

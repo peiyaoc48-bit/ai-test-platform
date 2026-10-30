@@ -310,6 +310,52 @@ describe('环境配置', () => {
   })
 })
 
+describe('变更注入与鲁棒性对比', () => {
+  it('去掉测试标记后 data-test 选择器失效，按占位符文字定位的选择器仍然有效；换样式不影响选择器', async () => {
+    const c = await create({
+      name: '鲁棒性',
+      description: '',
+      url: '{{DEMO}}/index.html',
+      steps: [
+        { type: 'code', content: "await page.locator('[data-test=username]').fill('demo', { timeout: 800 })" },
+        { type: 'code', content: "await page.getByPlaceholder('请输入用户名').fill('demo', { timeout: 800 })" },
+        { type: 'code', content: "const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)\nvars.bg = bg" },
+      ],
+    })
+    const started = await api('POST', `/api/cases/${c.id}/robustness`, {})
+    expect(started.status).toBe(202)
+    await executor.idle()
+    const batch = (await api('GET', `/api/batches/${started.body.batchId}`)).body
+    expect(batch.kind).toBe('robustness')
+    const runs = await Promise.all(batch.runs.map(async (r: any) => (await api<RunDetail>('GET', `/api/runs/${r.id}`)).body))
+    const byMut = Object.fromEntries(runs.map((r: RunDetail) => [r.mutation, r.steps.map((s) => s.status)]))
+    expect(byMut).toEqual({
+      none: ['passed', 'passed', 'passed'],
+      attr: ['failed', 'passed', 'passed'], // 失败后继续执行
+      style: ['passed', 'passed', 'passed'],
+    })
+    expect(runs.every((r: RunDetail) => r.continueOnFailure)).toBe(true)
+  })
+
+  it('样式注入确实生效；纯接口用例不能做鲁棒性对比', async () => {
+    const c = await create({
+      name: '样式',
+      description: '',
+      url: '{{DEMO}}/index.html',
+      steps: [{ type: 'code', content: "const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)\nif (bg !== 'rgb(255, 253, 245)') throw new Error(bg)" }],
+    })
+    const plain = await api('POST', `/api/cases/${c.id}/run`, {})
+    const styled = await api('POST', `/api/cases/${c.id}/run`, { mutation: 'style' })
+    await executor.idle()
+    expect((await api<RunDetail>('GET', `/api/runs/${plain.body.runId}`)).body.status).toBe('failed')
+    expect((await api<RunDetail>('GET', `/api/runs/${styled.body.runId}`)).body.status).toBe('passed')
+
+    expect((await api('POST', `/api/cases/${c.id}/run`, { mutation: 'evil' })).status).toBe(400)
+    const apiOnly = await create(SAMPLE_CASES[3])
+    expect((await api('POST', `/api/cases/${apiOnly.id}/robustness`, {})).body.error).toContain('纯接口用例')
+  })
+})
+
 describe('用例集与批量运行', () => {
   it('运行用例集：按顺序排队执行，批次汇总状态并可导出 JUnit', async () => {
     const pass = await create(SAMPLE_CASES[0])

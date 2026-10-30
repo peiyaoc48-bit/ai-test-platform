@@ -7,6 +7,7 @@ import { finishRun, getRun, markRunStarted, updateStep } from '../repo/runs.js'
 import { type AgentFactory, type AiAgent, midsceneAgentFactory, runAiStep, usageSnapshot } from './ai.js'
 import { buildVars } from '../env.js'
 import { ApiStepError, render, runApiStep } from './api-step.js'
+import { MUTATIONS } from './mutations.js'
 import { deriveRunStatus, formatError, runCodeStep } from './steps.js'
 
 export interface ExecutorOptions {
@@ -121,6 +122,7 @@ export class Executor {
           window.sessionStorage.setItem('__atp_init', '1')
         }, env.localStorage)
       }
+      if (run.mutation && run.mutation !== 'none') await context.addInitScript(MUTATIONS[run.mutation].script)
       page = await context.newPage()
       page.setDefaultTimeout(stepTimeoutMs)
       if (run.url) {
@@ -196,7 +198,8 @@ export class Executor {
           aiCalls: after.calls - before.calls,
           tokens: after.tokens - before.tokens,
         })
-        if (status === 'failed') break
+        // 鲁棒性对比需要每一步的结果，失败后继续执行
+        if (status === 'failed' && !run.continueOnFailure) break
       }
     } finally {
       // 失败后的步骤标记为未执行

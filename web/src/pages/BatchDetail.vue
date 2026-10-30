@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '../api'
-import type { BatchDetail } from '../../../shared/types'
+import type { BatchDetail, RunDetail } from '../../../shared/types'
+import RobustnessMatrix from '../components/RobustnessMatrix.vue'
 import { RUN_STATUS_LABEL, formatDuration, formatTime } from '../format'
 
 const props = defineProps<{ id: string }>()
 const batch = ref<BatchDetail | null>(null)
+const details = ref<RunDetail[]>([])
 const error = ref('')
 let timer: number | undefined
 
@@ -14,6 +16,7 @@ const done = computed(() => (batch.value ? batch.value.passed + batch.value.fail
 async function load() {
   try {
     batch.value = await api.getBatch(Number(props.id))
+    if (batch.value.kind === 'robustness') details.value = await Promise.all(batch.value.runs.map((r) => api.getRun(r.id)))
   } catch (e: any) {
     error.value = e.message
   }
@@ -43,7 +46,13 @@ onBeforeUnmount(() => clearTimeout(timer))
       <template v-if="batch.durationMs"> · 耗时 {{ formatDuration(batch.durationMs) }}</template>
     </div>
 
-    <div class="card flush">
+    <template v-if="batch.kind === 'robustness'">
+      <div class="alert info">
+        同一用例分别在三种情况下运行（失败后继续执行）：无变更、去掉 data-test 等测试标记、更换视觉样式。依赖测试标记的选择器在第二列会失效，视觉断言不受影响；需要配置模型才能看到视觉步骤的结果。
+      </div>
+      <RobustnessMatrix :runs="details" />
+    </template>
+    <div class="card flush" v-else>
       <table class="table">
         <thead><tr><th style="width: 70px">运行</th><th>用例</th><th style="width: 90px">结果</th><th style="width: 160px">步骤（通过/失败/跳过）</th><th style="width: 100px">耗时</th></tr></thead>
         <tbody>

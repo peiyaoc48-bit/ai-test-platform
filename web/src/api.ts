@@ -40,6 +40,7 @@ export const api = {
   deleteSuite: (id: number) => request<void>('DELETE', `/api/suites/${id}`),
   runSuite: (id: number) => request<{ batchId: number; runIds: number[] }>('POST', `/api/suites/${id}/run`, {}),
   runBatch: (caseIds: number[]) => request<{ batchId: number; runIds: number[] }>('POST', '/api/batches', { caseIds, envId: currentEnvId.value }),
+  robustness: (id: number) => request<{ batchId: number; runIds: number[] }>('POST', `/api/cases/${id}/robustness`, { envId: currentEnvId.value }),
   listEnvs: () => request<Environment[]>('GET', '/api/environments'),
   getEnv: (id: number) => request<Environment>('GET', `/api/environments/${id}`),
   createEnv: (e: EnvironmentInput) => request<Environment>('POST', '/api/environments', e),

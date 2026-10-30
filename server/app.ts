@@ -12,6 +12,8 @@ import { createBatch, createSuite, deleteSuite, getBatch, getSuite, listBatches,
 import { toJUnit } from './report/junit.js'
 import type { Executor } from './runner/executor.js'
 import { generateDrafts } from './ai/generate.js'
+import { isMutation } from './runner/mutations.js'
+import type { Mutation } from '../shared/types.js'
 import { buildVars, resolveTemplate } from './env.js'
 import { createEnvironment, deleteEnvironment, getEnvironment, listEnvironments, snapshot, updateEnvironment } from './repo/environments.js'
 import { demoApi } from './demo-api.js'
@@ -102,7 +104,9 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const tc = getCase(db, idParam(req))
     if (!tc) throw notFound('用例')
     const { env, resolve } = prepareEnv(parseEnvId((req.body as any)?.envId, envExists))
-    const runId = createRun(db, tc, resolve(tc.url), env)
+    const b = (req.body ?? {}) as { mutation?: unknown }
+    if (b.mutation !== undefined && !isMutation(b.mutation)) throw new ValidationError('mutation 只能是 none / attr / style')
+    const runId = createRun(db, tc, resolve(tc.url), { env, mutation: (b.mutation as Mutation) ?? 'none' })
     opts.executor.enqueue(runId)
     reply.status(202).send({ runId })
   })
@@ -127,7 +131,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
       name,
       suiteId,
       trigger: trigger === 'ci' ? 'ci' : 'manual',
-      cases,
+      items: cases.map((tc) => ({ tc })),
       resolveUrl: resolve,
       env,
     })
@@ -157,6 +161,22 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     const ids = validateCaseIds(b.caseIds, caseExists)
     const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim().slice(0, 100) : `批量运行（${ids.length} 个用例）`
     reply.status(202).send(startBatch(name, ids, null, b.trigger, parseEnvId(b.envId, envExists)))
+  })
+  // 鲁棒性对比：同一用例分别在“无变更 / 去掉测试标记 / 更换视觉样式”下运行，失败后继续执行，逐步对比
+  app.post('/api/cases/:id/robustness', async (req, reply) => {
+    const tc = getCase(db, idParam(req))
+    if (!tc) throw notFound('用例')
+    if (!tc.steps.some((s) => s.type !== 'api')) throw new ValidationError('纯接口用例没有页面，无法做界面变更对比')
+    const { env, resolve } = prepareEnv(parseEnvId((req.body as any)?.envId, envExists))
+    const { batchId, runIds } = createBatch(db, {
+      name: `鲁棒性对比：${tc.name}`,
+      kind: 'robustness',
+      items: (['none', 'attr', 'style'] as const).map((mutation) => ({ tc, mutation, continueOnFailure: true })),
+      resolveUrl: resolve,
+      env,
+    })
+    runIds.forEach((id) => opts.executor.enqueue(id))
+    reply.status(202).send({ batchId, runIds })
   })
   app.get('/api/batches', async () => listBatches(db))
   app.get('/api/batches/:id', async (req) => getBatch(db, idParam(req)) ?? Promise.reject(notFound('批次')))

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import ApiExchange from '../components/ApiExchange.vue'
-import { STEP_TYPE_LABEL, type RunDetail } from '../../../shared/types'
+import { MUTATION_LABEL, STEP_TYPE_LABEL, type RunDetail } from '../../../shared/types'
 import { RUN_STATUS_LABEL, STEP_STATUS_LABEL, formatDuration, formatTime } from '../format'
 
 const props = defineProps<{ id: string }>()
@@ -47,6 +47,7 @@ onBeforeUnmount(() => clearTimeout(timer))
         <h1>
           运行 <span class="num">#{{ run.id }}</span> · {{ run.caseName }}
           <span class="tag" :class="run.status" data-test="run-status" style="margin-left: 8px; vertical-align: 3px">{{ RUN_STATUS_LABEL[run.status] }}</span>
+          <span v-if="run.mutation && run.mutation !== 'none'" class="tag skipped" data-test="run-mutation" style="margin-left: 6px; vertical-align: 3px">变更注入：{{ MUTATION_LABEL[run.mutation] }}</span>
         </h1>
         <div class="sub num">{{ run.url || "纯接口用例（未打开浏览器）" }} · 环境：<span data-test="run-env">{{ run.env?.name ?? '默认' }}</span> · 开始于 {{ formatTime(run.startedAt) }}</div>
       </div>

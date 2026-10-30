@@ -97,6 +97,11 @@ function migrate(db: DB) {
   }
   // 运行时的环境快照（JSON），环境被修改或删除后历史报告仍可追溯
   if (!cols.includes('env_snapshot')) db.exec('ALTER TABLE runs ADD COLUMN env_snapshot TEXT')
+  // 变更注入（none / attr / style）与“失败后继续执行”（鲁棒性对比时逐步统计）
+  if (!cols.includes('mutation')) db.exec("ALTER TABLE runs ADD COLUMN mutation TEXT NOT NULL DEFAULT 'none'")
+  if (!cols.includes('continue_on_failure')) db.exec('ALTER TABLE runs ADD COLUMN continue_on_failure INTEGER NOT NULL DEFAULT 0')
+  const batchCols = (db.prepare('PRAGMA table_info(batches)').all() as { name: string }[]).map((c) => c.name)
+  if (!batchCols.includes('kind')) db.exec("ALTER TABLE batches ADD COLUMN kind TEXT NOT NULL DEFAULT 'normal'")
   const suiteCols = (db.prepare('PRAGMA table_info(suites)').all() as { name: string }[]).map((c) => c.name)
   if (!suiteCols.includes('env_id')) db.exec('ALTER TABLE suites ADD COLUMN env_id INTEGER REFERENCES environments(id) ON DELETE SET NULL')
   db.exec('CREATE INDEX IF NOT EXISTS idx_runs_batch ON runs(batch_id)')

@@ -1,4 +1,4 @@
-import type { BatchDetail, BatchSummary, EnvSnapshot, RunStatus, Suite, SuiteInput, TestCase } from '../../shared/types.js'
+import type { BatchDetail, BatchSummary, EnvSnapshot, Mutation, RunStatus, Suite, SuiteInput, TestCase } from '../../shared/types.js'
 import type { DB } from '../db.js'
 import { createRun, listRuns } from './runs.js'
 
@@ -55,15 +55,26 @@ export function deleteSuite(db: DB, id: number): boolean {
 /** 创建批次并为每个用例创建运行记录（同一事务），返回运行 id，交给执行队列 */
 export function createBatch(
   db: DB,
-  opts: { name: string; suiteId?: number | null; trigger?: 'manual' | 'ci'; cases: TestCase[]; resolveUrl: (url: string) => string; env?: EnvSnapshot | null },
+  opts: {
+    name: string
+    suiteId?: number | null
+    trigger?: 'manual' | 'ci'
+    kind?: 'normal' | 'robustness'
+    /** 每条运行：用例 + 运行选项（同一用例可出现多次，如鲁棒性对比） */
+    items: { tc: TestCase; mutation?: Mutation; continueOnFailure?: boolean }[]
+    resolveUrl: (url: string) => string
+    env?: EnvSnapshot | null
+  },
 ): { batchId: number; runIds: number[] } {
   return db.transaction(() => {
     const batchId = Number(
-      db.prepare('INSERT INTO batches (suite_id, name, trigger) VALUES (?, ?, ?)').run(opts.suiteId ?? null, opts.name, opts.trigger ?? 'manual').lastInsertRowid,
+      db
+        .prepare('INSERT INTO batches (suite_id, name, trigger, kind) VALUES (?, ?, ?, ?)')
+        .run(opts.suiteId ?? null, opts.name, opts.trigger ?? 'manual', opts.kind ?? 'normal').lastInsertRowid,
     )
     const setBatch = db.prepare('UPDATE runs SET batch_id = ? WHERE id = ?')
-    const runIds = opts.cases.map((c) => {
-      const runId = createRun(db, c, opts.resolveUrl(c.url), opts.env ?? null)
+    const runIds = opts.items.map(({ tc: c, mutation, continueOnFailure }) => {
+      const runId = createRun(db, c, opts.resolveUrl(c.url), { env: opts.env ?? null, mutation, continueOnFailure })
       setBatch.run(batchId, runId)
       return runId
     })
@@ -91,6 +102,7 @@ export function getBatch(db: DB, id: number): BatchDetail | null {
     suiteId: b.suite_id,
     name: b.name,
     trigger: b.trigger,
+    kind: b.kind ?? 'normal',
     createdAt: b.created_at,
     status: deriveBatchStatus(runs.map((r) => r.status)),
     total: runs.length,

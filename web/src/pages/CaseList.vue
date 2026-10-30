@@ -37,6 +37,16 @@ async function run(c: TestCase) {
   }
 }
 
+async function robustness(c: TestCase) {
+  error.value = ''
+  try {
+    const { batchId } = await api.robustness(c.id)
+    router.push(`/batches/${batchId}`)
+  } catch (e: any) {
+    error.value = e.message
+  }
+}
+
 async function runPicked() {
   error.value = ''
   try {
@@ -76,7 +86,7 @@ onMounted(load)
             <th>目标 URL</th>
             <th style="width: 150px">步骤</th>
             <th style="width: 170px">最近运行</th>
-            <th style="width: 220px"></th>
+            <th style="width: 290px"></th>
           </tr>
         </thead>
         <tbody>
@@ -103,6 +113,7 @@ onMounted(load)
             <td>
               <div class="actions">
                 <button class="btn sm primary" @click="run(c)" data-test="run">▶ 运行</button>
+                <button class="btn sm" v-if="c.steps.some((s) => s.type !== 'api')" @click="robustness(c)" data-test="robustness" title="分别在无变更、去掉测试标记、更换视觉样式下运行，对比哪些步骤失效">鲁棒性</button>
                 <RouterLink class="btn sm" :to="`/cases/${c.id}/edit`" data-test="edit">编辑</RouterLink>
                 <button class="btn sm danger" @click="remove(c)" data-test="delete">删除</button>
               </div>

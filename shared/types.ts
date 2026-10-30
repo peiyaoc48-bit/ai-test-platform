@@ -59,7 +59,12 @@ export interface RunSummary {
   error?: string | null
   batchId?: number | null
   envName?: string | null
+  /** 变更注入：none / attr（去掉测试标记）/ style（更换视觉样式） */
+  mutation?: Mutation
 }
+
+export type Mutation = 'none' | 'attr' | 'style'
+export const MUTATION_LABEL: Record<Mutation, string> = { none: '无变更', attr: '去掉测试标记', style: '更换视觉样式' }
 
 export interface RunDetail extends RunSummary {
   url: string
@@ -68,6 +73,7 @@ export interface RunDetail extends RunSummary {
   midsceneReport?: string | null
   /** 运行时的环境快照 */
   env?: EnvSnapshot | null
+  continueOnFailure?: boolean
 }
 
 export interface DailyStat {
@@ -133,6 +139,8 @@ export interface BatchSummary {
   suiteId: number | null
   name: string
   trigger: 'manual' | 'ci'
+  /** normal：普通批量运行；robustness：同一用例在不同变更下的对比 */
+  kind: 'normal' | 'robustness'
   createdAt: string
   /** 由所含运行推导：有未结束的为 running，有失败 / 异常为 failed，全部跳过为 skipped */
   status: RunStatus
