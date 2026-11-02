@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { BarChart3, Boxes, ChevronRight, Eye, FileText, LayoutDashboard, LogIn, LogOut, Server, ShieldCheck, Sparkles } from 'lucide-vue-next'
+import { BarChart3, Boxes, ChevronRight, ClipboardCheck, Eye, FileText, LayoutDashboard, LogIn, LogOut, Server, ShieldCheck, Sparkles } from 'lucide-vue-next'
 import { currentEnvId } from './env-store'
 import { api } from './api'
 import FeedbackLayer from './ui/FeedbackLayer.vue'
@@ -45,7 +45,13 @@ const groups = computed(() => [
     ],
   },
   { title: '执行与分析', items: [{ key: 'reports', to: '/reports', label: '测试报告', icon: BarChart3 }] },
-  { title: 'AI 能力', items: [{ key: 'generate', to: '/generate', label: 'AI 生成用例', icon: Sparkles }] },
+  {
+    title: 'AI 能力',
+    items: [
+      { key: 'workshop', to: '/workshop', label: '用例工坊', icon: ClipboardCheck },
+      { key: 'generate', to: '/generate', label: '快速生成', icon: Sparkles },
+    ],
+  },
 ])
 
 /** 面包屑：路由 meta.crumbs 为 [{ label, to? }]，最后一项为当前页 */

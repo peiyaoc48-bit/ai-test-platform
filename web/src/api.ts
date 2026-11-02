@@ -1,4 +1,18 @@
 import type { BatchDetail, BatchSummary, DashboardData, Environment, EnvironmentInput, Suite, SuiteInput } from '../../shared/types'
+import type {
+  BatchCompare,
+  Coverage,
+  DiscardReason,
+  Draft,
+  GenBatchDetail,
+  ParseRecord,
+  PromptInfo,
+  ReqPoint,
+  ReqPointInput,
+  Requirement,
+  RequirementDetail,
+  RequirementSummary,
+} from '../../shared/types'
 import { currentEnvId } from './env-store'
 import type { CaseInput, Stats, PlatformConfig, RunDetail, RunSummary, TestCase } from '../../shared/types'
 
@@ -55,6 +69,26 @@ export const api = {
   deleteEnv: (id: number) => request<void>('DELETE', `/api/environments/${id}`),
   listBatches: () => request<BatchSummary[]>('GET', '/api/batches'),
   getBatch: (id: number) => request<BatchDetail>('GET', `/api/batches/${id}`),
+  // —— 用例工坊 ——
+  prompts: () => request<PromptInfo[]>('GET', '/api/prompts'),
+  listRequirements: () => request<RequirementSummary[]>('GET', '/api/requirements'),
+  getRequirement: (id: number) => request<RequirementDetail>('GET', `/api/requirements/${id}`),
+  createRequirement: (r: { name: string; content: string; targetUrl: string }) => request<Requirement>('POST', '/api/requirements', r),
+  updateRequirement: (id: number, r: { name: string; content: string; targetUrl: string }) => request<Requirement>('PUT', `/api/requirements/${id}`, r),
+  deleteRequirement: (id: number) => request<void>('DELETE', `/api/requirements/${id}`),
+  parseRequirement: (id: number, promptVersion: string) =>
+    request<{ parse: ParseRecord; points: ReqPoint[] }>('POST', `/api/requirements/${id}/parse`, { promptVersion }),
+  savePoints: (id: number, points: ReqPointInput[]) => request<ReqPoint[]>('PUT', `/api/requirements/${id}/points`, { points }),
+  generateBatch: (id: number, scope: 'all' | 'uncovered' | number[], promptVersion: string) =>
+    request<GenBatchDetail>('POST', `/api/requirements/${id}/batches`, { scope, promptVersion }),
+  coverage: (id: number) => request<Coverage>('GET', `/api/requirements/${id}/coverage`),
+  getGenBatch: (id: number) => request<GenBatchDetail>('GET', `/api/gen-batches/${id}`),
+  runGenBatch: (id: number) => request<{ batchId: number; runIds: number[] }>('POST', `/api/gen-batches/${id}/run`),
+  compareBatches: (a: number, b: number) => request<BatchCompare>('GET', `/api/gen-batches/compare?a=${a}&b=${b}`),
+  reviewDraft: (
+    id: number,
+    body: { verdict: 'accepted' | 'edited' | 'discarded'; final?: CaseInput; pointIds?: number[]; reason?: DiscardReason; note?: string },
+  ) => request<Draft>('POST', `/api/drafts/${id}/review`, body),
   stats: (days: number, caseId?: number) =>
     request<Stats>('GET', `/api/stats?days=${days}${caseId ? `&caseId=${caseId}` : ''}`),
 }

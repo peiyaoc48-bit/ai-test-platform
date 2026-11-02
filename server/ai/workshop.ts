@@ -19,10 +19,13 @@ export function listPrompts(dir = PROMPT_DIR): PromptInfo[] {
     .sort((a, b) => a.kind.localeCompare(b.kind) || Number(a.version.slice(1)) - Number(b.version.slice(1)))
 }
 
+const badPrompt = (msg: string) => Object.assign(new Error(msg), { statusCode: 400 })
+
 export function readPrompt(kind: PromptInfo['kind'], version: string, dir = PROMPT_DIR) {
-  if (!/^v\d+$/.test(version)) throw new GenerateError(`Prompt 版本不合法：${version}`)
+  // 版本号来自请求参数：只接受 vN，防止拼出目录外的路径；参数错误是 400，不是模型调用失败（502）
+  if (!/^v\d+$/.test(version)) throw badPrompt(`Prompt 版本不合法：${version}`)
   const file = path.join(dir, `${kind}-${version}.md`)
-  if (!fs.existsSync(file)) throw Object.assign(new Error(`Prompt 版本不存在：${kind}-${version}`), { statusCode: 400 })
+  if (!fs.existsSync(file)) throw badPrompt(`Prompt 版本不存在：${kind}-${version}`)
   const text = fs.readFileSync(file, 'utf8')
   const [first, ...rest] = text.split('\n')
   return { summary: first.replace(/^#\s*/, '').trim(), system: rest.join('\n').trim() }

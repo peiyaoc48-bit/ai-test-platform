@@ -210,6 +210,7 @@ describe('生成批次与审核', () => {
     expect((await api('POST', `/api/requirements/${req.id}/batches`, { scope: [99999] })).status).toBe(400)
     expect((await api('POST', `/api/requirements/${req.id}/batches`, { scope: 'xx' })).status).toBe(400)
     expect((await api('POST', `/api/requirements/${req.id}/batches`, { promptVersion: 'v99' })).body.error).toContain('不存在')
+    expect((await api('POST', `/api/requirements/${req.id}/batches`, { promptVersion: '../x' })).status).toBe(400)
   })
 
   it('运行本批入库用例：创建批量运行并入队', async () => {

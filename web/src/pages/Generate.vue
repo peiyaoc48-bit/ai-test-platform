@@ -67,8 +67,11 @@ async function save() {
   <div class="page">
     <div class="page-head">
       <div>
-        <h1>AI 生成用例</h1>
-        <div class="sub">粘贴需求文本，由大模型生成自然语言步骤的用例草稿；草稿需人工审核、修改后才会保存。</div>
+        <h1>快速生成</h1>
+        <div class="sub">
+          粘贴需求文本，由大模型生成自然语言步骤的用例草稿，勾选后保存。不记录批次和审核结果；
+          需要追溯需求、统计采纳率和覆盖率时，请使用 <RouterLink to="/workshop">用例工坊</RouterLink>。
+        </div>
       </div>
     </div>
 
