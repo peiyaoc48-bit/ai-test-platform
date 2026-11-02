@@ -1,4 +1,29 @@
-# 部署到服务器（Docker + Nginx + HTTPS）
+# 部署到服务器
+
+## 实际采用的方式（1 核 / 1GB 小内存 VPS）
+
+演示站 <https://test.yaojade.top> 实际是这样部署的：没有用 Docker，也没有开放任何入站端口。
+
+| 环节 | 做法 |
+|---|---|
+| 运行环境 | Ubuntu 24.04，Node 20（NodeSource）、build-essential（现场编译 better-sqlite3），`npx playwright install --with-deps chromium`；浏览器放在 `/opt/ms-playwright`（`PLAYWRIGHT_BROWSERS_PATH`） |
+| 内存 | 在原有 1G swap 的基础上加 1G swap 文件；systemd 限制 `MemoryMax=800M`；执行队列串行，访客排队上限 4 |
+| 进程 | systemd 服务 `ai-test-platform`，以专用系统用户 `atp` 运行，`NoNewPrivileges`、`ProtectSystem=strict`，只能写 `/opt/ai-test-platform` |
+| 对外访问 | Cloudflare Tunnel（cloudflared 系统服务），路由 `test.yaojade.top → http://localhost:3100`，平台只监听 `127.0.0.1`；服务器原有的 443 端口服务完全不受影响 |
+| 运维 SSH | 同一条隧道再加一条路由 `ssh.yaojade.top → ssh://localhost:22222`，本机通过 `cloudflared access ssh` 作为 ProxyCommand 连接 |
+| 配置 | `/opt/ai-test-platform/.env`：`HOST=127.0.0.1`、`PUBLIC_DEMO=true`，`ACCESS_CODE` 和 `SESSION_SECRET` 在部署时随机生成，只保存在服务器上 |
+
+更新代码：
+
+```bash
+rsync -az --delete --exclude node_modules --exclude data --exclude dist --exclude .env --exclude .git ./ racknerd:/opt/ai-test-platform/
+ssh racknerd 'cd /opt/ai-test-platform && npm ci --include=dev && npx vite build && chown -R atp:atp . && systemctl restart ai-test-platform'
+```
+
+---
+
+## 另一种方式：Docker + Nginx + HTTPS
+
 
 目标：`https://test.yaojade.top` 公开展示平台，访客只读浏览、运行示例用例；输入访问口令后可以编辑。
 
