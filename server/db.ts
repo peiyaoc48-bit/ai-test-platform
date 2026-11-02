@@ -76,6 +76,94 @@ CREATE TABLE IF NOT EXISTS run_steps (
   tokens      INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (run_id, idx)
 );
+
+-- —— 用例工坊 ——
+-- 需求文档：修改原文时 version + 1，解析记录里保存当时的版本
+CREATE TABLE IF NOT EXISTS requirements (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT NOT NULL,
+  version      INTEGER NOT NULL DEFAULT 1,
+  content      TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  target_url   TEXT NOT NULL DEFAULT '',
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- 一次解析（需求文档 → 需求点），保留模型原始输出便于排查
+CREATE TABLE IF NOT EXISTS parses (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  requirement_id      INTEGER NOT NULL REFERENCES requirements(id) ON DELETE CASCADE,
+  requirement_version INTEGER NOT NULL,
+  model               TEXT NOT NULL,
+  prompt_version      TEXT NOT NULL,
+  tokens              INTEGER NOT NULL DEFAULT 0,
+  duration_ms         INTEGER NOT NULL DEFAULT 0,
+  added               INTEGER NOT NULL DEFAULT 0,
+  kept                INTEGER NOT NULL DEFAULT 0,
+  removed             INTEGER NOT NULL DEFAULT 0,
+  raw_output          TEXT,
+  created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- 需求点：重新解析时按标题相似度沿用旧行（编号与用例关联不变），没匹配上的标记为 removed
+CREATE TABLE IF NOT EXISTS req_points (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  requirement_id INTEGER NOT NULL REFERENCES requirements(id) ON DELETE CASCADE,
+  parse_id       INTEGER REFERENCES parses(id) ON DELETE SET NULL,
+  code           TEXT NOT NULL,
+  title          TEXT NOT NULL,
+  detail         TEXT NOT NULL DEFAULT '',
+  priority       TEXT NOT NULL DEFAULT 'P1',
+  source_excerpt TEXT NOT NULL DEFAULT '',
+  status         TEXT NOT NULL DEFAULT 'active',
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE (requirement_id, code)
+);
+
+-- 一次生成：scope 为本批针对的需求点；input_hash = Prompt 版本 + 需求点内容，相同表示输入可比
+CREATE TABLE IF NOT EXISTS gen_batches (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  requirement_id INTEGER NOT NULL REFERENCES requirements(id) ON DELETE CASCADE,
+  parse_id       INTEGER REFERENCES parses(id) ON DELETE SET NULL,
+  scope          TEXT NOT NULL,             -- JSON: number[]
+  model          TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  input_hash     TEXT NOT NULL,
+  tokens         INTEGER NOT NULL DEFAULT 0,
+  duration_ms    INTEGER NOT NULL DEFAULT 0,
+  raw_output     TEXT,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- 草稿：原稿（name/description/url/steps/point_ids）生成后不再修改，终稿另存在 final
+CREATE TABLE IF NOT EXISTS drafts (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  batch_id       INTEGER NOT NULL REFERENCES gen_batches(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  description    TEXT NOT NULL DEFAULT '',
+  url            TEXT NOT NULL,
+  steps          TEXT NOT NULL,             -- JSON: Step[]
+  point_ids      TEXT NOT NULL DEFAULT '[]',
+  confidence     REAL,
+  verdict        TEXT NOT NULL DEFAULT 'pending',
+  discard_reason TEXT,
+  final          TEXT,                      -- JSON: CaseInput & { pointIds }
+  edit_stats     TEXT,                      -- JSON: EditStats
+  note           TEXT NOT NULL DEFAULT '',
+  reviewed_at    TEXT,
+  case_id        INTEGER REFERENCES cases(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_drafts_batch ON drafts(batch_id);
+
+-- 用例 ↔ 需求点
+CREATE TABLE IF NOT EXISTS case_points (
+  case_id  INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  point_id INTEGER NOT NULL REFERENCES req_points(id) ON DELETE CASCADE,
+  PRIMARY KEY (case_id, point_id)
+);
+CREATE INDEX IF NOT EXISTS idx_case_points_point ON case_points(point_id);
 `
 
 /** file 传 ':memory:' 用于单元测试 */
@@ -107,4 +195,7 @@ function migrate(db: DB) {
   const suiteCols = (db.prepare('PRAGMA table_info(suites)').all() as { name: string }[]).map((c) => c.name)
   if (!suiteCols.includes('env_id')) db.exec('ALTER TABLE suites ADD COLUMN env_id INTEGER REFERENCES environments(id) ON DELETE SET NULL')
   db.exec('CREATE INDEX IF NOT EXISTS idx_runs_batch ON runs(batch_id)')
+  // 用例工坊入库的用例记录来源草稿（手写用例为空）
+  const caseCols = (db.prepare('PRAGMA table_info(cases)').all() as { name: string }[]).map((c) => c.name)
+  if (!caseCols.includes('source_draft_id')) db.exec('ALTER TABLE cases ADD COLUMN source_draft_id INTEGER REFERENCES drafts(id) ON DELETE SET NULL')
 }

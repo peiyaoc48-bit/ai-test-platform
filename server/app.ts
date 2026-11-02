@@ -20,6 +20,7 @@ import type { Mutation } from '../shared/types.js'
 import { buildVars, resolveTemplate } from './env.js'
 import { createEnvironment, deleteEnvironment, getEnvironment, listEnvironments, snapshot, updateEnvironment } from './repo/environments.js'
 import { demoApi } from './demo-api.js'
+import { registerWorkshop } from './workshop-routes.js'
 import { isValidTargetUrl, parseEnvId, validateCase, validateCaseIds, validateEnvironment, validateSuite, ValidationError } from './validate.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -166,6 +167,8 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     runIds.forEach((id) => opts.executor.enqueue(id))
     return { batchId, runIds }
   }
+
+  registerWorkshop(app, { db, fetchImpl: opts.fetchImpl, idParam, notFound, startBatch: (name, ids) => startBatch(name, ids, null, 'manual', null) })
 
   app.get('/api/suites', async () => listSuites(db))
   app.get('/api/suites/:id', async (req) => getSuite(db, idParam(req)) ?? Promise.reject(notFound('用例集')))

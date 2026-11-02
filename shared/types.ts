@@ -214,3 +214,206 @@ export const STEP_TYPE_LABEL: Record<StepType, string> = {
   code: 'Playwright 代码',
   api: '接口请求',
 }
+
+// —— 用例工坊：需求 → 需求点 → 生成批次 → 草稿审核 → 入库；需求覆盖矩阵 ——
+
+export type Priority = 'P0' | 'P1' | 'P2'
+
+export interface Requirement {
+  id: number
+  name: string
+  /** 每次修改原文版本号 +1 */
+  version: number
+  content: string
+  contentHash: string
+  /** 生成用例时的默认 URL */
+  targetUrl: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RequirementSummary extends Requirement {
+  points: number
+  batches: number
+  pendingDrafts: number
+  /** 已验证（关联用例最近一次运行通过）的需求点占比；没有需求点时为 null */
+  verifiedRate: number | null
+  /** 已关联用例的需求点占比 */
+  linkedRate: number | null
+}
+
+export interface ReqPoint {
+  id: number
+  requirementId: number
+  /** 为空表示人工新增 */
+  parseId: number | null
+  code: string
+  title: string
+  detail: string
+  priority: Priority
+  /** 原文摘录（出处） */
+  sourceExcerpt: string
+  /** 摘录能否在原文中找到；找不到说明模型可能编造了需求 */
+  excerptFound: boolean
+  status: 'active' | 'removed'
+}
+
+export type ReqPointInput = Pick<ReqPoint, 'title' | 'detail' | 'priority' | 'sourceExcerpt'> & { id?: number }
+
+export interface ParseRecord {
+  id: number
+  requirementId: number
+  requirementVersion: number
+  model: string
+  promptVersion: string
+  tokens: number
+  durationMs: number
+  /** 本次解析新增 / 沿用 / 移除的需求点数 */
+  added: number
+  kept: number
+  removed: number
+  createdAt: string
+}
+
+export type Verdict = 'pending' | 'accepted' | 'edited' | 'discarded'
+export type DiscardReason = 'duplicate' | 'out_of_scope' | 'not_executable' | 'vague_assert' | 'low_value' | 'other'
+
+export const VERDICT_LABEL: Record<Verdict, string> = { pending: '待审核', accepted: '通过', edited: '修改后通过', discarded: '废弃' }
+export const DISCARD_REASON_LABEL: Record<DiscardReason, string> = {
+  duplicate: '重复',
+  out_of_scope: '需求外（幻觉）',
+  not_executable: '不可执行',
+  vague_assert: '断言含糊',
+  low_value: '价值低',
+  other: '其他',
+}
+
+/** 审核时的修改量：按步骤（类型 + 内容）对齐后统计 */
+export interface EditStats {
+  added: number
+  removed: number
+  changed: number
+  kept: number
+  nameChanged: boolean
+}
+
+export interface Draft {
+  id: number
+  batchId: number
+  /** 原稿，生成后不再修改 */
+  name: string
+  description: string
+  url: string
+  steps: Step[]
+  /** 模型声称覆盖的需求点 */
+  pointIds: number[]
+  confidence: number | null
+  verdict: Verdict
+  discardReason: DiscardReason | null
+  /** 入库的终稿（通过时与原稿相同） */
+  final: (CaseInput & { pointIds: number[] }) | null
+  editStats: EditStats | null
+  note: string
+  reviewedAt: string | null
+  caseId: number | null
+}
+
+/** 比例与 95% Wilson 置信区间；分母为 0 时 rate 为 null */
+export interface Proportion {
+  n: number
+  k: number
+  rate: number | null
+  ci: [number, number] | null
+}
+
+export interface BatchStats {
+  total: number
+  reviewed: number
+  accepted: number
+  edited: number
+  discarded: number
+  /** (通过 + 修改后通过) / 已审核 */
+  adoption: Proportion
+  /** 通过 / 已审核 */
+  direct: Proportion
+  /** 修改后通过的草稿平均改动步数（增 + 删 + 改） */
+  avgEditedSteps: number | null
+  reasons: Record<DiscardReason, number>
+  /** 本批入库用例的首次运行（无变更注入、排除跳过）通过情况 */
+  firstRun: Proportion
+  /** 本批让多少个需求点从“未关联”变为“已关联” */
+  newlyLinked: number
+  /** 每条被采纳用例平均消耗的生成 token */
+  tokensPerAdopted: number | null
+}
+
+export interface GenBatch {
+  id: number
+  /** 同一需求内的序号，界面上显示为 batch-1、batch-2 */
+  seq: number
+  requirementId: number
+  parseId: number | null
+  scope: number[]
+  model: string
+  promptVersion: string
+  inputHash: string
+  tokens: number
+  durationMs: number
+  createdAt: string
+  stats: BatchStats
+}
+
+export interface GenBatchDetail extends GenBatch {
+  drafts: Draft[]
+  points: ReqPoint[]
+}
+
+export interface RequirementDetail extends Requirement {
+  points: ReqPoint[]
+  parses: ParseRecord[]
+  batches: GenBatch[]
+}
+
+/** uncovered：无关联用例；linked：已关联但没有可下结论的运行；verified：至少一条关联用例最近一次运行通过；failed：关联用例最近一次运行都失败 */
+export type CoverageStatus = 'uncovered' | 'linked' | 'verified' | 'failed'
+export const COVERAGE_LABEL: Record<CoverageStatus, string> = {
+  uncovered: '未覆盖',
+  linked: '已关联·未执行',
+  verified: '已验证',
+  failed: '失败',
+}
+
+export interface CoverageRow {
+  point: ReqPoint
+  status: CoverageStatus
+  cases: { id: number; name: string; lastStatus: RunStatus | null; lastRunId: number | null }[]
+}
+
+export interface Coverage {
+  requirementId: number
+  total: number
+  counts: Record<CoverageStatus, number>
+  /** 优先级为 P0 且未覆盖的需求点 */
+  p0Uncovered: ReqPoint[]
+  rows: CoverageRow[]
+  /** 按批次累计：截至该批次，由生成用例关联到的需求点数 */
+  timeline: { batchId: number; seq: number; promptVersion: string; linked: number; rate: number }[]
+}
+
+export interface PromptInfo {
+  kind: 'parse' | 'gen'
+  version: string
+  /** Prompt 文件第一行的说明 */
+  summary: string
+}
+
+/** 两个批次的对比：采纳率差异用 Fisher 精确检验 */
+export interface BatchCompare {
+  a: GenBatch
+  b: GenBatch
+  /** 两批是否针对相同的需求点（输入可比） */
+  sameScope: boolean
+  adoptionPValue: number | null
+  /** 每组已审核数都 ≥ 20 时才认为样本量足够 */
+  enoughSamples: boolean
+}

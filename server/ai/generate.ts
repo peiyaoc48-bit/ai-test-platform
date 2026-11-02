@@ -95,6 +95,9 @@ const TYPE_ALIASES: Record<string, StepType> = {
   aiquery: 'ai_query',
 }
 
+/** 识别模型输出的步骤类型别名；只认三种自然语言步骤，其他（如 code）返回 undefined */
+export const normalizeStepType = (t: unknown): StepType | undefined => TYPE_ALIASES[String(t ?? '').toLowerCase().replace(/[\s-]/g, '')]
+
 /** 从模型输出中取出 JSON：兼容 ```json 代码块、前后多余文字 */
 export function extractJson(content: string): unknown {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i)
@@ -118,7 +121,7 @@ export function parseDrafts(content: string, url: string): CaseInput[] {
     if (!c || typeof c !== 'object') continue
     const steps: Step[] = (Array.isArray(c.steps) ? c.steps : [])
       .map((s: any): Step | null => {
-        const type = TYPE_ALIASES[String(s?.type ?? '').toLowerCase().replace(/[\s-]/g, '')]
+        const type = normalizeStepType(s?.type)
         const content = typeof s?.content === 'string' ? s.content.trim() : ''
         return type && content ? { type, content } : null
       })
