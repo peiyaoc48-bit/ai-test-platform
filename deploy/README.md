@@ -53,7 +53,7 @@ curl -fsSL https://get.docker.com | sh
 ## 3. 上传代码并配置
 
 ```bash
-git clone <仓库地址> /opt/ai-test-platform    # 或在本机 rsync 上传
+git clone https://github.com/peiyaoc48-bit/ai-test-platform.git /opt/ai-test-platform    # 或在本机 rsync 上传
 cd /opt/ai-test-platform
 cp deploy/env.production.example .env          # 填写 ACCESS_CODE、SESSION_SECRET（模型 key 可选）
 docker compose up -d --build

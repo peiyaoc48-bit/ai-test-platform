@@ -1,0 +1,31 @@
+# 用例新建接口的参数校验（数据驱动）：每一项都应返回 400 和对应的中文提示
+- id: 名称为空
+  patch: { name: "   " }
+  error: 用例名称不能为空
+- id: 名称超长
+  patch: { name: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
+  error: 不能超过 100
+- id: 缺少名称字段
+  remove: name
+  error: 用例名称不能为空
+- id: URL 协议非法
+  patch: { url: "ftp://example.com" }
+  error: 目标 URL
+- id: URL 为 javascript 伪协议
+  patch: { url: "javascript:alert(1)" }
+  error: 目标 URL
+- id: 步骤为空数组
+  patch: { steps: [] }
+  error: 至少需要一个步骤
+- id: 步骤不是数组
+  patch: { steps: "点击登录" }
+  error: 至少需要一个步骤
+- id: 步骤类型非法
+  patch: { steps: [{ type: shell, content: "rm -rf /" }] }
+  error: 第 1 步的类型不合法
+- id: 第二步内容为空
+  patch: { steps: [{ type: code, content: "1" }, { type: ai_assert, content: "  " }] }
+  error: 第 2 步的内容不能为空
+- id: 名称类型错误
+  patch: { name: 123 }
+  error: 用例名称不能为空

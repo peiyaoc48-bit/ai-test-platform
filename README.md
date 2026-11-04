@@ -1,5 +1,7 @@
 # AI 驱动的 UI 自动化测试平台
 
+[![CI](https://github.com/peiyaoc48-bit/ai-test-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/peiyaoc48-bit/ai-test-platform/actions/workflows/ci.yml)
+
 在 Web 页面上管理测试用例、一键执行、查看报告。用例步骤可以写 **Playwright 代码**（选择器，快且确定）、**自然语言**（交给 [Midscene.js](https://midscenejs.com/) 视觉模型看截图执行）或**接口请求**（YAML 描述请求、断言和变量提取），几种步骤可以写在同一个用例里。用例可以组成用例集批量运行，导出 JUnit 报告接入 CI，也可以导出为独立运行的 Playwright 脚本。同一套用例可以在不同环境（地址、变量、浏览器参数、权限、预置登录态）下运行。平台还能注入界面变更来检验用例的鲁棒性，代码步骤选择器失效时可以由 AI 兜底（自愈）。还能粘贴需求文本，让大模型生成用例草稿，人工审核后再入库。
 
 > **在线演示：<https://test.yaojade.top>**（访客只读，可以运行示例用例）
@@ -225,5 +227,4 @@ examples/proctor/   实战：测试毕设“在线考试智能监考系统”
 
 - 本仓库的自动化测试都没有调用真实模型（自然语言步骤由假 Agent 或假模型代替）。用例工坊的采纳率等度量需要用真实模型生成、由人实际审核后才有意义，目前还没有真实数据。真实的视觉执行效果和 token 数据，需要配置 key 后实际运行才能看到。
 - 执行队列是串行的（一次一个运行）；暂不支持并发执行、定时任务和多用户权限。
-- GitHub Actions 工作流还没有在远程仓库上实际运行过。
 - 视觉模型相关的功能（AI 步骤、AI 兜底、Midscene 缓存）在本仓库的测试里由假 Agent 代替，还没有用真实模型 key 跑过。
