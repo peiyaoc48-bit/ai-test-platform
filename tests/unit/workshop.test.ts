@@ -289,3 +289,41 @@ describe('批次对比', () => {
     expect((await api('GET', '/api/gen-batches/compare?a=1')).status).toBe(400)
   })
 })
+
+describe('公开演示站（只读访客）', () => {
+  it('访客只能浏览需求、批次与度量，任何会调用模型或改数据的接口都返回 403，且模型一次都没被调用；登录后可以生成', async () => {
+    const { req, points } = await setup()
+    const batch = (await api<GenBatchDetail>('POST', `/api/requirements/${req.id}/batches`, { scope: 'all' })).body
+    const viewerApp = await buildApp({ db, port: 3999, artifactsDir, executor, fetchImpl: fakeFetch, access: { accessCode: 'c', publicDemo: true, secret: 's' } })
+    const as = (headers = {}) => (method: string, url: string, payload: unknown = {}) => viewerApp.inject({ method: method as any, url, payload: payload as any, headers })
+    const viewer = as()
+    const before = calls.length
+
+    for (const url of ['/api/prompts', '/api/requirements', `/api/requirements/${req.id}`, `/api/requirements/${req.id}/coverage`, `/api/requirements/${req.id}/coverage.csv`, `/api/gen-batches/${batch.id}`]) {
+      expect((await viewer('GET', url)).statusCode, url).toBe(200)
+    }
+    const writes: [string, string, unknown?][] = [
+      ['POST', '/api/requirements', { name: 'x', content: DOC }],
+      ['PUT', `/api/requirements/${req.id}`, { name: 'x', content: DOC }],
+      ['DELETE', `/api/requirements/${req.id}`],
+      ['POST', `/api/requirements/${req.id}/parse`],
+      ['PUT', `/api/requirements/${req.id}/points`, { points: [] }],
+      ['POST', `/api/requirements/${req.id}/batches`, { scope: 'all' }],
+      ['POST', `/api/requirements/${req.id}/batches`, { scope: [points[0].id], promptVersion: 'v2' }],
+      ['POST', `/api/gen-batches/${batch.id}/run`],
+      ['POST', `/api/drafts/${batch.drafts[0].id}/review`, { verdict: 'accepted' }],
+    ]
+    for (const [method, url, payload] of writes) {
+      const r = await viewer(method, url, payload)
+      expect([r.statusCode, r.json().code], `${method} ${url}`).toEqual([403, 'READ_ONLY'])
+    }
+    expect(calls.length).toBe(before)
+    expect(enqueued).toEqual([])
+
+    const login = await viewer('POST', '/api/login', { code: 'c' })
+    const admin = as({ cookie: (login.headers['set-cookie'] as string).split(';')[0] })
+    expect((await admin('POST', `/api/requirements/${req.id}/batches`, { scope: [points[0].id] })).statusCode).toBe(201)
+    expect(calls.length).toBe(before + 1)
+    await viewerApp.close()
+  })
+})
