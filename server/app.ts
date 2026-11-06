@@ -21,6 +21,7 @@ import { buildVars, resolveTemplate } from './env.js'
 import { createEnvironment, deleteEnvironment, getEnvironment, listEnvironments, snapshot, updateEnvironment } from './repo/environments.js'
 import { demoApi } from './demo-api.js'
 import { registerWorkshop } from './workshop-routes.js'
+import { type ExploreDeps, registerExplore } from './explore-routes.js'
 import { isValidTargetUrl, parseEnvId, validateCase, validateCaseIds, validateEnvironment, validateSuite, ValidationError } from './validate.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -38,6 +39,8 @@ export interface AppOptions {
   fetchImpl?: typeof fetch
   /** 公网部署时的访问控制；不传则所有人都是管理员 */
   access?: Omit<AccessOptions, 'queueLength'>
+  /** 测试时替换掉真实的探索器 */
+  runExplore?: ExploreDeps['runExplore']
 }
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
@@ -168,6 +171,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
     return { batchId, runIds }
   }
 
+  registerExplore(app, { db, port: opts.port, idParam, notFound, busy: () => opts.executor.pending() > 0, runExplore: opts.runExplore })
   registerWorkshop(app, { db, fetchImpl: opts.fetchImpl, idParam, notFound, startBatch: (name, ids) => startBatch(name, ids, null, 'manual', null) })
 
   app.get('/api/suites', async () => listSuites(db))

@@ -417,3 +417,64 @@ export interface BatchCompare {
   /** 每组已审核数都 ≥ 20 时才认为样本量足够 */
   enoughSamples: boolean
 }
+
+// —— 探索模式（M1）——
+
+export type ExploreStatus = 'running' | 'done' | 'failed'
+export type ExploreStop = 'complete' | 'max_states' | 'max_clicks'
+
+export interface ExploreRunSummary {
+  id: number
+  baseUrl: string
+  status: ExploreStatus
+  stopReason: ExploreStop | null
+  error: string | null
+  clicks: number
+  stateCount: number
+  elementCount: number
+  /** 只记录、没有点击的危险控件 */
+  dangerSkipped: number
+  /** 被网络层拦截的请求（写请求 / 白名单外的主机） */
+  blockedCount: number
+  startedAt: string
+  finishedAt: string | null
+}
+
+export interface ExploreState {
+  id: number
+  idx: number
+  urlPattern: string
+  title: string
+  depth: number
+  reproducible: boolean
+}
+export interface ExploreElement {
+  id: number
+  key: string
+  role: string
+  name: string
+  selector: string
+  danger: 'keyword' | 'logout' | null
+  clicked: boolean
+  stateIds: number[]
+}
+export interface ExploreTransition {
+  fromStateId: number
+  toStateId: number
+  elementId: number
+  action: 'click' | 'fill'
+  effect: 'navigated' | 'dom_changed' | 'no_change' | 'blocked_write' | 'blocked_host' | 'not_found'
+}
+export interface ExploreBlocked {
+  stateId: number | null
+  url: string
+  method: string
+  reason: 'host' | 'write'
+}
+export interface ExploreRunDetail extends ExploreRunSummary {
+  config: Record<string, unknown>
+  states: ExploreState[]
+  elements: ExploreElement[]
+  transitions: ExploreTransition[]
+  blocked: ExploreBlocked[]
+}

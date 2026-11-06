@@ -164,6 +164,67 @@ CREATE TABLE IF NOT EXISTS case_points (
   PRIMARY KEY (case_id, point_id)
 );
 CREATE INDEX IF NOT EXISTS idx_case_points_point ON case_points(point_id);
+
+-- 探索模式（M1：只采集，不标注）
+CREATE TABLE IF NOT EXISTS kb_runs (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  base_url      TEXT NOT NULL,
+  config        TEXT NOT NULL,             -- JSON，预置登录动作里的值已替换为 ***
+  status        TEXT NOT NULL DEFAULT 'running',  -- running | done | failed
+  stop_reason   TEXT,
+  error         TEXT,
+  clicks        INTEGER NOT NULL DEFAULT 0,
+  started_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  finished_at   TEXT
+);
+CREATE TABLE IF NOT EXISTS kb_states (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id        INTEGER NOT NULL REFERENCES kb_runs(id) ON DELETE CASCADE,
+  idx           INTEGER NOT NULL,
+  url_pattern   TEXT NOT NULL,
+  fingerprint   TEXT NOT NULL,
+  title         TEXT NOT NULL DEFAULT '',
+  depth         INTEGER NOT NULL,
+  reproducible  INTEGER NOT NULL DEFAULT 1,
+  path          TEXT NOT NULL,             -- JSON: 从起点到该状态的动作
+  UNIQUE (run_id, idx)
+);
+CREATE TABLE IF NOT EXISTS kb_elements (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id        INTEGER NOT NULL REFERENCES kb_runs(id) ON DELETE CASCADE,
+  element_key   TEXT NOT NULL,
+  role          TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  selector      TEXT NOT NULL,
+  tag           TEXT NOT NULL,
+  input_type    TEXT,
+  danger        TEXT,                      -- keyword | logout | NULL
+  clicked       INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (run_id, element_key)
+);
+CREATE TABLE IF NOT EXISTS kb_occurrences (
+  element_id    INTEGER NOT NULL REFERENCES kb_elements(id) ON DELETE CASCADE,
+  state_id      INTEGER NOT NULL REFERENCES kb_states(id) ON DELETE CASCADE,
+  count         INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (element_id, state_id)
+);
+CREATE TABLE IF NOT EXISTS kb_transitions (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id        INTEGER NOT NULL REFERENCES kb_runs(id) ON DELETE CASCADE,
+  from_state_id INTEGER NOT NULL REFERENCES kb_states(id) ON DELETE CASCADE,
+  element_id    INTEGER NOT NULL REFERENCES kb_elements(id) ON DELETE CASCADE,
+  action        TEXT NOT NULL,
+  to_state_id   INTEGER NOT NULL REFERENCES kb_states(id) ON DELETE CASCADE,
+  effect        TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kb_blocked (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id        INTEGER NOT NULL REFERENCES kb_runs(id) ON DELETE CASCADE,
+  state_id      INTEGER REFERENCES kb_states(id) ON DELETE SET NULL,
+  url           TEXT NOT NULL,             -- 已去掉查询参数的值
+  method        TEXT NOT NULL,
+  reason        TEXT NOT NULL              -- host | write
+);
 `
 
 /** file 传 ':memory:' 用于单元测试 */
