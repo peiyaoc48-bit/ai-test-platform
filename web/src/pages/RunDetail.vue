@@ -156,6 +156,7 @@ onBeforeUnmount(() => { clearTimeout(timer); window.removeEventListener('keydown
         <div v-if="step.fallback" class="fallback"><Sparkles :size="13" />AI 兜底（{{ step.fallback.type === 'ai_assert' ? '断言' : '操作' }}）：{{ step.fallback.content }}</div>
 
         <div v-if="step.error && step.status === 'healed'" class="box heal"><div class="box-title">已自愈</div><pre class="code">{{ step.error }}</pre></div>
+        <div v-else-if="step.error && step.status === 'passed'" class="box muted-box" data-test="step-note"><Info :size="14" />{{ step.error }}</div>
         <div v-else-if="step.error && step.status !== 'skipped'" class="box err"><div class="box-title">错误</div><pre class="code">{{ step.error }}</pre></div>
         <div v-else-if="step.status === 'skipped'" class="box muted-box"><Info :size="14" />{{ step.error }}</div>
         <div v-else-if="step.status === 'not_run'" class="box muted-box"><Info :size="14" />前面的步骤失败，本步未执行</div>

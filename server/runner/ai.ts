@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto'
 import type { Page } from 'playwright'
-import type { StepType } from '../../shared/types.js'
+import type { Step, StepType } from '../../shared/types.js'
+import { formatError } from './steps.js'
 
 /** Midscene Agent 中执行器用到的最小接口，便于单元测试替换 */
 export interface AiAgent {
@@ -41,4 +43,43 @@ export async function runAiStep(agent: AiAgent, type: StepType, content: string)
 export function usageSnapshot(agent: AiAgent | null) {
   const m = agent?.metrics
   return { calls: m?.calls ?? 0, tokens: m?.totalTokens ?? 0 }
+}
+
+/**
+ * 用例指纹：由目标地址和步骤内容算出，作为 Midscene 缓存 id 的一部分。
+ * 用例改了步骤，指纹随之变化，旧的规划与定位缓存自动失效；内容不变则继续复用缓存。
+ */
+export function caseFingerprint(url: string, steps: Pick<Step, 'type' | 'content' | 'fallback'>[]) {
+  const body = JSON.stringify({ url, steps: steps.map((s) => ({ type: s.type, content: s.content, fallback: s.fallback ?? null })) })
+  return createHash('sha256').update(body).digest('hex').slice(0, 8)
+}
+
+/**
+ * 带诊断的断言：失败后等待一段时间重试一次。
+ * - 重试通过：多半是页面尚未稳定（时序问题），步骤算通过，但返回提示，提醒补等待条件；
+ * - 仍失败：排除偶发时序问题，再让模型描述页面实际情况，附在错误信息里，方便判断是产品缺陷还是预期写得不清楚。
+ */
+export async function assertWithDiagnosis(agent: AiAgent, assertion: string, retryDelayMs: number): Promise<{ note: string | null }> {
+  try {
+    await agent.aiAssert(assertion)
+    return { note: null }
+  } catch {
+    await new Promise((r) => setTimeout(r, retryDelayMs))
+  }
+  const wait = `${(retryDelayMs / 1000).toFixed(1).replace(/\.0$/, '')} 秒`
+  try {
+    await agent.aiAssert(assertion)
+    return { note: `首次断言失败，等待 ${wait}后重试通过：页面可能尚未稳定（时序问题），建议在断言前先等待目标状态出现。` }
+  } catch (e) {
+    let actual = ''
+    try {
+      const q = await agent.aiQuery(`string, 用一句话描述当前页面中与“${assertion}”相关的实际情况`)
+      actual = typeof q === 'string' ? q : JSON.stringify(q)
+    } catch {
+      // 诊断失败不影响断言结论
+    }
+    throw new Error(
+      `${formatError(e)}\n\n诊断：等待 ${wait}后重试仍失败，已排除偶发时序问题。` + (actual ? `\n页面实际情况（AI 描述）：${actual}` : ''),
+    )
+  }
 }

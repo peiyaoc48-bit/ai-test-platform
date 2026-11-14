@@ -23,14 +23,20 @@ let port = 0
 const agentCalls: string[] = []
 const factoryOpts: ({ cacheId?: string } | undefined)[] = []
 
-/** 假 Agent：每次调用计 1 次模型、100 token；内容含“失败”的断言会抛错 */
+/** 假 Agent：每次调用计 1 次模型、100 token；内容含“失败”的断言会抛错，含“偶发”的断言只在第一次抛错 */
 function fakeAgent(): AiAgent {
   const metrics = { calls: 0, totalTokens: 0 }
+  const seen = new Set<string>()
   const call = async (kind: string, prompt: string) => {
     agentCalls.push(`${kind}:${prompt}`)
     metrics.calls += 1
     metrics.totalTokens += 100
+    if (kind === 'query' && prompt.includes('实际情况')) return '页面上没有找到相关内容'
     if (prompt.includes('失败')) throw new Error(`断言失败：${prompt}`)
+    if (prompt.includes('偶发') && !seen.has(prompt)) {
+      seen.add(prompt)
+      throw new Error(`断言失败：${prompt}`)
+    }
     return kind === 'query' ? ['买牛奶'] : undefined
   }
   return {
@@ -51,6 +57,7 @@ beforeAll(async () => {
     artifactsDir,
     browserChannel: process.env.BROWSER_CHANNEL ?? 'chrome',
     stepTimeoutMs: 3000,
+    assertRetryDelayMs: 10,
     modelConfigured: () => modelOn,
     agentFactory: async (_page, _runId, o) => {
       factoryOpts.push(o)
@@ -185,7 +192,8 @@ describe('执行引擎', () => {
     })
     const run = await runAndWait(c.id)
     expect(run.status).toBe('failed')
-    expect(run.steps[0]).toMatchObject({ status: 'failed', aiCalls: 1, tokens: 100 })
+    // 断言 + 重试 + 诊断查询，共 3 次模型调用
+    expect(run.steps[0]).toMatchObject({ status: 'failed', aiCalls: 3, tokens: 300 })
     expect(run.steps[1].status).toBe('not_run')
   })
 
@@ -418,7 +426,44 @@ describe('AI 兜底（自愈）', () => {
     const c = await create({ name: '缓存', description: '', url: '{{DEMO}}/index.html', steps: [{ type: 'ai_assert', content: '页面有登录按钮' }] })
     await api('POST', `/api/cases/${c.id}/robustness`, {})
     await executor.idle()
-    expect(factoryOpts.map((o) => o?.cacheId)).toEqual([`case-${c.id}`, undefined, undefined])
+    const ids = factoryOpts.map((o) => o?.cacheId)
+    expect(ids[0]).toMatch(new RegExp(`^case-${c.id}-[0-9a-f]{8}$`))
+    expect(ids.slice(1)).toEqual([undefined, undefined])
+  })
+
+  it('缓存 id 带用例指纹：内容不变复用缓存，改了步骤缓存失效', async () => {
+    modelOn = true
+    const input = { name: '指纹', description: '', url: '{{DEMO}}/index.html', steps: [{ type: 'ai_assert' as const, content: '页面有登录按钮' }] }
+    const c = await create(input)
+    await runAndWait(c.id)
+    await api('PUT', `/api/cases/${c.id}`, { ...input, name: '只改名字' })
+    await runAndWait(c.id)
+    await api('PUT', `/api/cases/${c.id}`, { ...input, steps: [{ type: 'ai_assert', content: '页面有注册按钮' }] })
+    await runAndWait(c.id)
+    const [a, b, d] = factoryOpts.map((o) => o?.cacheId)
+    expect(a).toBe(b)
+    expect(d).not.toBe(a)
+    expect(d).toMatch(new RegExp(`^case-${c.id}-`))
+  })
+
+  it('断言失败后重试：重试通过记为通过并提示时序问题', async () => {
+    modelOn = true
+    const c = await create({ name: '偶发', description: '', url: '{{DEMO}}/index.html', steps: [{ type: 'ai_assert', content: '偶发：列表已加载' }] })
+    const run = await runAndWait(c.id)
+    expect(run.status).toBe('passed')
+    expect(run.steps[0].status).toBe('passed')
+    expect(run.steps[0].error).toContain('重试通过')
+    expect(run.steps[0].aiCalls).toBe(2)
+  })
+
+  it('断言重试仍失败：附上 AI 对页面实际情况的描述', async () => {
+    modelOn = true
+    const c = await create({ name: '真失败', description: '', url: '{{DEMO}}/index.html', steps: [{ type: 'ai_assert', content: '失败：页面显示欢迎语' }] })
+    const run = await runAndWait(c.id)
+    expect(run.steps[0].status).toBe('failed')
+    expect(run.steps[0].error).toContain('已排除偶发时序问题')
+    expect(run.steps[0].error).toContain('页面实际情况（AI 描述）：页面上没有找到相关内容')
+    expect(run.steps[0].aiCalls).toBe(3)
   })
 
   it('只有代码步骤可以设置兜底', async () => {

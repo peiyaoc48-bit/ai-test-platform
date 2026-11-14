@@ -4,7 +4,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from 'playwrig
 import type { StepStatus } from '../../shared/types.js'
 import type { DB } from '../db.js'
 import { finishRun, getRun, markRunStarted, updateStep } from '../repo/runs.js'
-import { type AgentFactory, type AiAgent, midsceneAgentFactory, runAiStep, usageSnapshot } from './ai.js'
+import { type AgentFactory, type AiAgent, assertWithDiagnosis, caseFingerprint, midsceneAgentFactory, runAiStep, usageSnapshot } from './ai.js'
 import { buildVars } from '../env.js'
 import { ApiStepError, render, runApiStep } from './api-step.js'
 import { MUTATIONS } from './mutations.js'
@@ -26,6 +26,8 @@ export interface ExecutorOptions {
   templateVars?: () => Record<string, string>
   /** 是否开启 Midscene 缓存（默认开启）；变更注入的运行始终不用缓存，避免缓存的定位结果干扰对比 */
   aiCache?: boolean
+  /** 自然语言断言失败后，等待多久重试一次（默认 1000 ms） */
+  assertRetryDelayMs?: number
 }
 
 /**
@@ -93,11 +95,14 @@ export class Executor {
   }
 
   private async execute(runId: number) {
-    const cacheId = (r: { caseId: number; mutation?: string }) =>
-      this.opts.aiCache !== false && (r.mutation ?? 'none') === 'none' ? `case-${r.caseId}` : undefined
     const { db } = this.opts
     const run = getRun(db, runId)
     if (!run) return
+    // 缓存 id 带上用例指纹：步骤一改，旧缓存自动失效
+    const cacheId =
+      this.opts.aiCache !== false && (run.mutation ?? 'none') === 'none'
+        ? `case-${run.caseId}-${caseFingerprint(run.url ?? '', run.steps)}`
+        : undefined
     markRunStarted(db, runId)
     const t0 = performance.now()
     const runDir = path.join(this.opts.artifactsDir, `run-${runId}`)
@@ -179,10 +184,14 @@ export class Executor {
             output = r
           } else if (isAi) {
             const p = await ensurePage()
-            agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId, { cacheId: cacheId(run) })
-            output = await runAiStep(agent, step.type, step.content)
-            if (step.type === 'ai_query') vars[`step${i + 1}`] = output
-            else output = undefined
+            agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId, { cacheId })
+            if (step.type === 'ai_assert') {
+              error = (await assertWithDiagnosis(agent, step.content, this.opts.assertRetryDelayMs ?? 1000)).note
+            } else {
+              output = await runAiStep(agent, step.type, step.content)
+              if (step.type === 'ai_query') vars[`step${i + 1}`] = output
+              else output = undefined
+            }
           } else {
             const p = await ensurePage()
             try {
@@ -191,7 +200,7 @@ export class Executor {
               // 自愈：代码步骤失败（多为选择器失效），若配置了 AI 兜底且有模型，改用视觉模型按描述执行
               if (e instanceof NavigationError || !step.fallback) throw e
               if (!this.opts.modelConfigured()) throw new Error(`${formatError(e)}\n（已设置 AI 兜底，但未配置模型，无法自愈）`)
-              agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId, { cacheId: cacheId(run) })
+              agent ??= await (this.opts.agentFactory ?? midsceneAgentFactory)(p, runId, { cacheId })
               try {
                 await runAiStep(agent, step.fallback.type, step.fallback.content)
               } catch (aiErr) {
